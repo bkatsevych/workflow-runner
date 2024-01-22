@@ -16,11 +16,10 @@ fn main() {
         )
         .arg(
             arg!(
-                <MAX_JOBS> 
+                --"maxjobs" [MAX_JOBS] "Number of maximal parallel tasks."
             )
             .value_parser(value_parser!(u16))
             .default_value("100")
-            .required(false),
         )
         .arg(
             arg!(
@@ -50,20 +49,17 @@ fn main() {
             .action(ArgAction::Append))
         .arg(arg!(--"optimistic-resources" "Try to run workflow even though resource limits might underestimate resource needs of some tasks")
             .action(ArgAction::Append))
-        .arg(arg!(<BACKFILL>)
+        .arg(arg!(--"n-backfill" [BACKFILL])
             .value_parser(value_parser!(u16))
             .default_value("1")
-            .required(false),
         )
-        .arg(arg!(<MEM_LIMIT>)
+        .arg(arg!(--"mem-limit" [MEM_LIMIT] "Set memory limit as scheduling constraint (in MB)")
             .value_parser(value_parser!(f64))
             .default_value((0.9 * max_system_mem / 1024. / 1024.).to_string())
-            .required(false),
         )
-        .arg(arg!(<CPU_LIMIT>)
+        .arg(arg!(--"cpu-limit" [CPU_LIMIT] "Set CPU limit (core count)")
             .value_parser(value_parser!(u16))
             .default_value("8")
-            .required(false),
         )
         .arg(arg!(--"cgroup" "Execute pipeline under a given cgroup (e.g., 8coregrid) emulating resource constraints.\nThis must exist and the tasks file must be writable to with the current user."))
         // run control, webhooks
@@ -73,11 +69,10 @@ fn main() {
             .hide(true))
         .arg(arg!(--"checkpoint-on-failure")
             .hide(true))
-        .arg(arg!(<RETRY_ON_FAILURE>)
+        .arg(arg!([RETRY_ON_FAILURE])
             .value_parser(value_parser!(u16))
             .default_value("0")
             .hide(true)
-            .required(false),
         )
         .arg(arg!(--"no-rootinit-speedup")
             .action(ArgAction::SetTrue)
@@ -88,6 +83,4 @@ fn main() {
         .arg(arg!(--"production-mode" "Production mode")
             .action(ArgAction::SetTrue))
         .get_matches();
-
-   
 }
