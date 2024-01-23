@@ -6,7 +6,7 @@ fn main() {
     let max_system_mem = system.total_memory() as f64;
 
     // defining command line options
-    let _matches = Command::new("parser")
+    let matches = Command::new("parser")
         .about("Parallel execution of a (O2-DPG) DAG data/job pipeline under resource contraints")
         .arg(
             arg!(
@@ -69,7 +69,7 @@ fn main() {
             .hide(true))
         .arg(arg!(--"checkpoint-on-failure")
             .hide(true))
-        .arg(arg!([RETRY_ON_FAILURE])
+        .arg(arg!(--"retry-on-failure" [RETRY_ON_FAILURE])
             .value_parser(value_parser!(u16))
             .default_value("0")
             .hide(true)
@@ -83,4 +83,6 @@ fn main() {
         .arg(arg!(--"production-mode" "Production mode")
             .action(ArgAction::SetTrue))
         .get_matches();
+
+    println!("{:?}", matches)
 }
