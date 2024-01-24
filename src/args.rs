@@ -3,7 +3,7 @@ use sysinfo::System;
 
 #[derive(Debug, Parser)]
 #[command(author, version, about, long_about = None)]
-pub struct Cli {
+pub struct Args {
     /// Input workflow file name
     #[arg(short = 'f', long)]
     pub workflow_file: String,
@@ -25,7 +25,7 @@ pub struct Cli {
     pub visualize_workflow: bool,
 
     // TO DO
-    // target_labels: Option<Vec<T>>,
+    // target_labels: Vec<String>,
     // target_tasks: Vec<String>,
     /// Produces a shell script that runs the workflow in serialized manner and quits
     #[arg(long)]

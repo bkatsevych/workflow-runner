@@ -1,10 +1,14 @@
-mod args;
-
-use args::Cli;
+use args::Args;
 use clap::Parser;
 
-fn main() {
-    let cli = Cli::parse();
+mod args;
+mod resource_manager;
+mod utils;
+mod workflow_executor;
+mod workflow_spec;
 
-    println!("{:?}", cli);
+fn main() {
+    let args = Args::parse();
+
+    println!("{:?}", args);
 }
