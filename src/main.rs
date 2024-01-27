@@ -1,8 +1,7 @@
 use arguments::Arguments;
 use clap::Parser;
-use std::process;
-
 use logger::{LogLevel, Logger};
+use std::process;
 
 mod arguments;
 mod logger;
