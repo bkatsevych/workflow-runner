@@ -1,10 +1,10 @@
-use args::Args;
+use arguments::Arguments;
 use clap::Parser;
 use std::process;
 
-use crate::logger::{LogLevel, Logger};
+use logger::{LogLevel, Logger};
 
-mod args;
+mod arguments;
 mod logger;
 mod resource_manager;
 mod utils;
@@ -12,22 +12,22 @@ mod workflow_executor;
 mod workflow_spec;
 
 fn main() {
-    let args = Args::parse();
+    let arguments = Arguments::parse();
 
-    println!("{:?}", args);
+    println!("{:?}", arguments);
 
-    let actionlogger = Logger::new(
+    let action_logger = Logger::new(
         format!("pipeline_action_{}.log", process::id()),
         LogLevel::INFO,
     );
 
-    let metriclogger = Logger::new(
+    let metric_logger = Logger::new(
         format!("pipeline_metric_{}.log", process::id()),
         LogLevel::INFO,
     );
 
-    // actionlogger.info("Score for task is 10");
-    // metriclogger.info("Resources per task is 5");
-    // actionlogger.debug("Task has not enough points (< 3) to sample resources, setting to previously assigned values.");
-    // actionlogger.warning("Sampled CPU (2.5) exceeds assigned CPU limit (2.0)");
+    // action_logger.info("Score for task is 10");
+    // metric_logger.info("Resources per task is 5");
+    // action_logger.debug("Task has not enough points (< 3) to sample resources, setting to previously assigned values.");
+    // action_logger.warning("Sampled CPU (2.5) exceeds assigned CPU limit (2.0)");
 }

@@ -1,46 +1,39 @@
-use std::collections::HashMap;
-use std::env;
-use std::process;
-use std::sync::mpsc::{channel, Receiver, Sender};
-use std::sync::{Arc, Mutex};
-use std::thread;
-use std::time::Duration;
-
-use crate::args::Args;
+use crate::arguments::Arguments;
 use crate::resource_manager::ResourceManager;
 use crate::utils::load_json;
 use crate::workflow_spec::WorkflowSpec;
+use std::collections::HashMap;
 
 pub struct WorkflowExecutor {
-    args: Args,
-    is_productionmode: bool,
-    workflowfile: String,
-    workflowspec: WorkflowSpec,
-    globalenv: HashMap<String, String>,
-    possiblenexttask: Vec<String>,
-    taskweights: Vec<f32>,
+    args: Arguments,
+    is_production_mode: bool,
+    workflow_file: String,
+    workflow_spec: WorkflowSpec,
+    global_env: HashMap<String, String>,
+    possible_next_task: Vec<String>,
+    task_weights: Vec<f32>,
     topological_orderings: Vec<String>,
-    taskuniverse: Vec<String>,
-    idtotask: Vec<String>,
-    tasktoid: HashMap<String, usize>,
+    task_universe: Vec<String>,
+    id_to_task: Vec<String>,
+    task_toid: HashMap<String, usize>,
     resource_manager: ResourceManager,
-    procstatus: HashMap<usize, String>,
-    taskneeds: HashMap<String, Vec<String>>,
-    stoponfailure: bool,
+    proc_status: HashMap<usize, String>,
+    task_needs: HashMap<String, Vec<String>>,
+    stop_on_failure: bool,
     scheduling_iteration: usize,
     process_list: Vec<String>,
     backfill_process_list: Vec<String>,
     pid_to_psutilsproc: HashMap<usize, String>,
     pid_to_files: HashMap<usize, String>,
     pid_to_connections: HashMap<usize, String>,
-    internalmonitorcounter: usize,
-    internalmonitorid: usize,
-    tids_marked_toretry: Vec<usize>,
+    internal_monitor_counter: usize,
+    internal_monitor_id: usize,
+    tids_marked_to_retry: Vec<usize>,
     retry_counter: Vec<usize>,
     task_retries: Vec<usize>,
     alternative_envs: HashMap<usize, String>,
 }
 
 impl WorkflowExecutor {
-    pub fn new(args: Args, workflowfile: String, jmax: u16) -> Self {}
+    // pub fn new(args: Args, workflowfile: String, jmax: u16) -> Self {}
 }

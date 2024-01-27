@@ -3,7 +3,7 @@ use sysinfo::System;
 
 #[derive(Debug, Parser)]
 #[command(author, version, about, long_about = None)]
-pub struct Args {
+pub struct Arguments {
     /// Input workflow file name
     #[arg(short = 'f', long)]
     pub workflow_file: String,
