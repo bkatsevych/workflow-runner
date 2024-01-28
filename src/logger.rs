@@ -7,6 +7,7 @@ pub enum LogLevel {
     INFO,
     DEBUG,
     WARNING,
+    ERROR,
 }
 
 pub struct Logger {
@@ -15,8 +16,8 @@ pub struct Logger {
 }
 
 impl Logger {
-    pub fn new(log_file: String, level: LogLevel) -> Logger {
-        Logger { log_file, level }
+    pub fn new(log_file: String, level: LogLevel) -> Self {
+        Self { log_file, level }
     }
 
     pub fn log(&self, level: &LogLevel, message: &str) {
@@ -46,5 +47,9 @@ impl Logger {
 
     pub fn warning(&self, message: &str) {
         self.log(&LogLevel::WARNING, message);
+    }
+
+    pub fn error(&self, message: &str) {
+        self.log(&LogLevel::ERROR, message);
     }
 }
