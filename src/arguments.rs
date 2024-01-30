@@ -33,6 +33,7 @@ pub struct Arguments {
 
     #[arg(
         long,
+        default_value = "*",
         num_args = .., help ="Runs the pipeline by target tasks (example \"tpcdigi\").\nBy default everything in the graph is run. Regular expressions supported."
     )]
     target_tasks: Vec<String>,
