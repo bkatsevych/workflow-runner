@@ -29,14 +29,15 @@ pub struct Arguments {
         num_args = ..,
         help = "Runs the pipeline by target labels (example \"TPC\" or \"DIGI\").\nThis condition is used as logical AND together with --target-tasks."
     )]
-    target_labels: Vec<String>,
+    pub target_labels: Vec<String>,
 
     #[arg(
         long,
         default_value = "*",
-        num_args = .., help ="Runs the pipeline by target tasks (example \"tpcdigi\").\nBy default everything in the graph is run. Regular expressions supported."
+        num_args = .., 
+        help ="Runs the pipeline by target tasks (example \"tpcdigi\").\nBy default everything in the graph is run. Regular expressions supported."
     )]
-    target_tasks: Vec<String>,
+    pub target_tasks: Vec<String>,
 
     /// Produces a shell script that runs the workflow in serialized manner and quits
     #[arg(long)]
