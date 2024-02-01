@@ -1,34 +1,35 @@
 use arguments::Arguments;
 use clap::Parser;
 use logger::{LogLevel, Logger};
-use std::fs::File;
-use std::io::Write;
 use std::process;
 use std::process::{exit, Command};
+use workflow_executor::WorkflowExecutor;
 
 mod arguments;
 mod logger;
 mod resource_manager;
 mod utils;
 mod workflow_executor;
-mod workflow_spec;
 
 fn main() {
+    // defining command line options
     let arguments = Arguments::parse();
 
     println!("{:?}", arguments);
 
+    // first file logger
     let action_logger = Logger::new(
         format!("pipeline_action_{}.log", process::id()),
         LogLevel::INFO,
     );
 
+    // second file logger
     let metric_logger = Logger::new(
         format!("pipeline_metric_{}.log", process::id()),
         LogLevel::INFO,
     );
 
-    if let Some(cgroup) = arguments.cgroup {
+    if let Some(cgroup) = &arguments.cgroup {
         let my_pid = std::process::id().to_string();
         // cgroups such as /sys/fs/cgroup/cpuset/<cgroup-name>/tasks
         // or              /sys/fs/cgroup/cpu/<cgroup-name>/tasks
@@ -46,4 +47,6 @@ fn main() {
         }
         action_logger.info("Running in cgroup");
     }
+
+    let workflow_executor = WorkflowExecutor::new(arguments, action_logger, metric_logger);
 }
