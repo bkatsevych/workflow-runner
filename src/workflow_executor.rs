@@ -33,7 +33,7 @@ impl WorkflowExecutor {
                     "Applying global environment from init section {} : {}",
                     e, value
                 ));
-                env::set_var(e, value.as_str().unwrap());
+                env::set_var(e, value.to_string()); // Convert value to String before setting as environment variable
             }
         }
 
@@ -54,6 +54,9 @@ impl WorkflowExecutor {
         }
 
         // construct the DAG, compute task weights
+        let workflow = build_dag_properties(&workflow_spec, &action_logger);
+
+        println!("{:?}", workflow);
 
         WorkflowExecutor {
             arguments,
@@ -239,4 +242,201 @@ fn filter_workflow(
     );
 
     workflow_spec
+}
+
+fn find_all_dependent_tasks(
+    possiblenexttask: &HashMap<String, Vec<String>>,
+    tid: &str,
+    cache: &mut HashMap<String, Vec<String>>,
+) -> Vec<String> {
+    if let Some(c) = cache.get(tid) {
+        return c.clone();
+    }
+
+    let mut daughterlist = vec![tid.to_string()];
+    if let Some(tasks) = possiblenexttask.get(tid) {
+        for n in tasks {
+            let mut c = if let Some(cached) = cache.get(n) {
+                cached.clone()
+            } else {
+                find_all_dependent_tasks(possiblenexttask, n, cache)
+            };
+            daughterlist.append(&mut c);
+            cache.insert(n.to_string(), c);
+        }
+    }
+
+    cache.insert(tid.to_string(), daughterlist.clone());
+    daughterlist.sort();
+    daughterlist.dedup();
+    daughterlist
+}
+
+fn find_all_topological_orders(
+    graph: &mut Graph,
+    path: &mut Vec<usize>,
+    discovered: &mut Vec<bool>,
+    n: usize,
+    allpaths: &mut Vec<Vec<usize>>,
+    maxnumber: usize,
+) {
+    if allpaths.len() >= maxnumber {
+        return;
+    }
+
+    for v in 0..n {
+        if graph.indegree[v] == 0 && !discovered[v] {
+            for u in &graph.adj_list[v] {
+                graph.indegree[*u] -= 1;
+            }
+
+            path.push(v);
+            discovered[v] = true;
+
+            find_all_topological_orders(graph, path, discovered, n, allpaths, maxnumber);
+
+            for u in &graph.adj_list[v] {
+                graph.indegree[*u] += 1;
+            }
+
+            path.pop();
+            discovered[v] = false;
+        }
+    }
+
+    if path.len() == n {
+        allpaths.push(path.clone());
+    }
+}
+
+fn print_all_topological_orders(graph: &mut Graph, maxnumber: usize) -> Vec<Vec<usize>> {
+    let n = graph.adj_list.len();
+    let mut discovered = vec![false; n];
+    let mut path = Vec::new();
+    let mut allpaths = Vec::new();
+
+    find_all_topological_orders(
+        graph,
+        &mut path,
+        &mut discovered,
+        n,
+        &mut allpaths,
+        maxnumber,
+    );
+
+    allpaths
+}
+
+fn analyse_graph(
+    edges: &[(usize, usize)],
+    nodes: &[usize],
+) -> (Vec<Vec<usize>>, HashMap<usize, Vec<usize>>) {
+    let n = nodes.len();
+    let mut nextjobtrivial = HashMap::new();
+    nextjobtrivial.insert(usize::MAX, nodes.to_vec());
+
+    for &(src, dest) in edges {
+        nextjobtrivial
+            .entry(src)
+            .or_insert_with(Vec::new)
+            .push(dest);
+        if let Some(vec) = nextjobtrivial.get_mut(&usize::MAX) {
+            vec.retain(|&x| x != dest);
+        }
+    }
+
+    let mut graph = Graph::new(edges, n);
+    let orderings = print_all_topological_orders(&mut graph, 1);
+
+    (orderings, nextjobtrivial)
+}
+
+fn build_graph(taskuniverse: &[(Value, usize)]) -> (Vec<(usize, usize)>, Vec<usize>) {
+    let tasktoid: HashMap<String, usize> = taskuniverse
+        .iter()
+        .map(|(l, i)| (l["name"].as_str().unwrap().to_string(), *i))
+        .collect();
+
+    let mut nodes = Vec::new();
+    let mut edges = Vec::new();
+
+    for (l, _) in taskuniverse {
+        let name = l["name"].as_str().unwrap();
+        nodes.push(tasktoid[name]);
+
+        if let Some(needs) = l["needs"].as_array() {
+            for n in needs {
+                let n_str = n.as_str().unwrap();
+                edges.push((tasktoid[n_str], tasktoid[name]));
+            }
+        }
+    }
+
+    (edges, nodes)
+}
+
+fn build_dag_properties(workflowspec: &Value, action_logger: &Logger) -> HashMap<String, Value> {
+    let globaltaskuniverse: Vec<(Value, usize)> = workflowspec["stages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .enumerate()
+        .map(|(i, l)| (l.clone(), i))
+        .collect();
+
+    let (edges, nodes) = build_graph(&globaltaskuniverse);
+    let (orderings, global_next_tasks) = analyse_graph(&edges, &nodes);
+
+    let global_next_tasks_str: HashMap<String, Vec<String>> = global_next_tasks
+        .iter()
+        .map(|(k, v)| (k.to_string(), v.iter().map(|i| i.to_string()).collect()))
+        .collect();
+
+    let mut dependency_cache = HashMap::new();
+
+    fn getweight(
+        tid: usize,
+        globaltaskuniverse: &[(Value, usize)],
+        global_next_tasks: &HashMap<String, Vec<String>>,
+        dependency_cache: &mut HashMap<String, Vec<String>>,
+    ) -> (Value, usize) {
+        let timeframe = globaltaskuniverse[tid].0["timeframe"].clone();
+        let dependent_tasks =
+            find_all_dependent_tasks(global_next_tasks, &tid.to_string(), dependency_cache);
+        (timeframe, dependent_tasks.len())
+    }
+
+    let task_weights: Vec<(Value, usize)> = (0..globaltaskuniverse.len())
+        .map(|tid| {
+            getweight(
+                tid,
+                &globaltaskuniverse,
+                &global_next_tasks_str,
+                &mut dependency_cache,
+            )
+        })
+        .collect();
+
+    for tid in 0..globaltaskuniverse.len() {
+        action_logger.info(&format!(
+            "Score for {} is {:?}",
+            globaltaskuniverse[tid].0["name"], task_weights[tid]
+        ));
+    }
+
+    let mut result = HashMap::new();
+    result.insert(
+        "nexttasks".to_string(),
+        serde_json::to_value(global_next_tasks_str).unwrap(),
+    );
+    result.insert(
+        "weights".to_string(),
+        serde_json::to_value(task_weights).unwrap(),
+    );
+    result.insert(
+        "topological_ordering".to_string(),
+        serde_json::to_value(orderings).unwrap(),
+    );
+
+    result
 }
