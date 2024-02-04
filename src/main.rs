@@ -6,6 +6,7 @@ use std::process::{exit, Command};
 use workflow_executor::WorkflowExecutor;
 
 mod arguments;
+mod graph;
 mod logger;
 mod resource_manager;
 mod utils;

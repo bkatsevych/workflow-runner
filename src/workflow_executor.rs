@@ -1,10 +1,13 @@
 use crate::arguments::Arguments;
+use crate::graph::Graph;
 use crate::logger::Logger;
 use crate::utils::load_json;
 use regex::Regex;
+use serde_json::Map;
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::env;
+use std::iter::FromIterator;
 use std::process;
 
 pub struct WorkflowExecutor {
@@ -14,29 +17,7 @@ pub struct WorkflowExecutor {
     action_logger: Logger,
     metric_logger: Logger,
     workflow_spec: Value,
-    global_env: HashMap<String, Value>,
-    // possible_next_task: Vec<String>,
-    // task_weights: Vec<f32>,
-    // topological_orderings: Vec<String>,
-    // taskuniverse: Vec<String>,
-    // id_to_task: Vec<String>,
-    // task_toid: HashMap<String, usize>,
-    // resource_manager: ResourceManager,
-    // proc_status: HashMap<usize, String>,
-    // task_needs: HashMap<String, Vec<String>>,
-    // stop_on_failure: bool,
-    // scheduling_iteration: usize,
-    // process_list: Vec<String>,
-    // backfill_process_list: Vec<String>,
-    // pid_to_psutilsproc: HashMap<usize, String>,
-    // pid_to_files: HashMap<usize, String>,
-    // pid_to_connections: HashMap<usize, String>,
-    // internal_monitor_counter: usize,
-    // internal_monitor_id: usize,
-    // tids_marked_to_retry: Vec<usize>,
-    // retry_counter: Vec<usize>,
-    // task_retries: Vec<usize>,
-    // alternative_envs: HashMap<usize, String>,
+    global_init: HashMap<String, Value>,
 }
 
 impl WorkflowExecutor {
@@ -44,55 +25,35 @@ impl WorkflowExecutor {
         let is_production_mode = arguments.production_mode;
         let workflow_file: String = arguments.workflow_file.clone();
         let mut workflow_spec = load_json(workflow_file.as_str()).unwrap();
-        let init_index = 0; // this has to be the first task in the workflow
+        let global_init = extract_global_environment(&mut workflow_spec);
 
-        // initialize global environment settings
-        let mut global_env = HashMap::new();
-
-        if workflow_spec["stages"][init_index]["name"] == "__global_init_task__" {
-            if let Some(env) = workflow_spec["stages"][init_index].get("env") {
-                if env.is_object() {
-                    for (key, value) in env.as_object().unwrap() {
-                        global_env.insert(key.clone(), value.clone());
-                    }
-                }
-            }
-            workflow_spec["stages"]
-                .as_array_mut()
-                .unwrap()
-                .remove(init_index);
-        }
-
-        for (e, value) in &global_env {
+        for (e, value) in global_init["env"].as_object().unwrap().iter() {
             if env::var(e).is_err() {
                 action_logger.info(&format!(
                     "Applying global environment from init section {} : {}",
                     e, value
                 ));
-                env::set_var(e, value.to_string());
+                env::set_var(e, value.as_str().unwrap());
             }
         }
 
-        let target_tasks_as_str = arguments.target_tasks.iter().map(|s| s.as_str()).collect();
-        let target_labels_as_str = arguments.target_labels.iter().map(|s| s.as_str()).collect();
-
         // only keep those tasks that are necessary to be executed based on user's filters
-        let tranformed_workflow_spec = filter_workflow(
-            &mut workflow_spec,
-            target_tasks_as_str,
-            target_labels_as_str,
+        workflow_spec = filter_workflow(
+            workflow_spec,
+            arguments.target_tasks.clone(),
+            arguments.target_labels.clone(),
         );
 
-        workflow_spec = tranformed_workflow_spec.clone();
-
-        if workflow_spec["stages"].as_array().unwrap().is_empty() {
-            if arguments.target_tasks.is_empty() {
+        if workflow_spec["stages"].is_null() {
+            if !arguments.target_tasks.is_empty() {
                 println!("Apparently some of the chosen target tasks are not in the workflow");
                 process::exit(0);
             }
             println!("Workflow is empty. Nothing to do");
             process::exit(0);
         }
+
+        // construct the DAG, compute task weights
 
         WorkflowExecutor {
             arguments,
@@ -101,38 +62,97 @@ impl WorkflowExecutor {
             action_logger,
             metric_logger,
             workflow_spec,
-            global_env,
-            // possible_next_task: workflow.nexttasks,
-            // task_weights: workflow.weights,
-            // topological_orderings: workflow.topological_ordering,
-            // taskuniverse,
-            // id_to_task,
-            // task_to_id,
-            // resource_manager,
-            // proc_status,
-            // task_needs,
-            // stop_on_failure,
-            // scheduling_iteration: 0,
-            // process_list: vec![],
-            // backfill_process_list: vec![],
-            // pid_to_psutilsproc: HashMap::new(),
-            // pid_to_files: HashMap::new(),
-            // pid_to_connections: HashMap::new(),
-            // internal_monitor_counter: 0,
-            // internal_monitor_id: 0,
-            // tids_marked_to_retry: vec![],
-            // retry_counter,
-            // task_retries,
-            // alternative_envs,
+            global_init,
         }
     }
 }
 
-fn filter_workflow<'a>(
-    workflow_spec: &'a mut Value,
-    target_tasks: Vec<&str>,
-    target_labels: Vec<&str>,
-) -> &'a mut Value {
+fn extract_global_environment(workflow_spec: &mut Value) -> HashMap<String, Value> {
+    let init_index = 0; // this has to be the first task in the workflow
+    let mut globalenv = HashMap::new();
+    let mut initcmd = None;
+
+    if workflow_spec["stages"][init_index]["name"] == "__global_init_task__" {
+        let env = workflow_spec["stages"][init_index].get("env").cloned();
+        if let Some(e) = env {
+            if let Some(e) = e.as_object() {
+                globalenv = e.clone().into_iter().collect();
+            }
+        }
+        let cmd = workflow_spec["stages"][init_index].get("cmd").cloned();
+        if cmd != Some(Value::String("NO-COMMAND".to_string())) {
+            initcmd = cmd;
+        }
+
+        workflow_spec["stages"]
+            .as_array_mut()
+            .unwrap()
+            .remove(init_index);
+    }
+
+    let mut result = HashMap::from_iter(globalenv.clone().into_iter());
+    result.insert(
+        "env".to_string(),
+        Value::Object(serde_json::Map::from_iter(globalenv.clone().into_iter())),
+    );
+    if let Some(cmd) = initcmd {
+        result.insert("cmd".to_string(), cmd);
+    }
+
+    result
+}
+
+fn can_be_done(
+    t: &Value,
+    workflow_spec: &Value,
+    tasknametoid: &HashMap<String, usize>,
+    cache: &mut HashMap<String, bool>,
+) -> bool {
+    let c = cache.get(&t["name"].to_string());
+    if let Some(cached) = c {
+        return *cached;
+    }
+    let mut ok = true;
+    for r in t["needs"].as_array().unwrap() {
+        let taskid = tasknametoid.get(&r.to_string());
+        if let Some(id) = taskid {
+            if !can_be_done(
+                &workflow_spec["stages"].as_array().unwrap()[*id],
+                workflow_spec,
+                tasknametoid,
+                cache,
+            ) {
+                ok = false;
+                break;
+            }
+        } else {
+            ok = false;
+            break;
+        }
+    }
+    cache.insert(t["name"].to_string(), ok);
+    ok
+}
+
+fn get_all_requirements<'a>(
+    t: &'a Value,
+    workflow_spec: &'a Value,
+    tasknametoid: &'a HashMap<String, usize>,
+) -> Vec<&'a Value> {
+    let mut _l: Vec<&'a Value> = Vec::new();
+    for r in t["needs"].as_array().unwrap() {
+        let fulltask = &workflow_spec["stages"].as_array().unwrap()[tasknametoid[&r.to_string()]];
+        _l.push(fulltask);
+        _l.extend(get_all_requirements(fulltask, workflow_spec, tasknametoid));
+    }
+    _l
+}
+
+fn filter_workflow(
+    mut workflow_spec: Value,
+    target_tasks: Vec<String>,
+    target_labels: Vec<String>,
+) -> Value {
     if target_tasks.is_empty() {
         return workflow_spec;
     }
@@ -140,127 +160,83 @@ fn filter_workflow<'a>(
         return workflow_spec;
     }
 
-    let mut task_name_to_id: HashMap<&str, usize> = HashMap::new();
-    let stages = workflow_spec["stages"].as_array().unwrap();
-    for (i, t) in stages.iter().enumerate() {
-        let name = t["name"].as_str().unwrap();
-        task_name_to_id.insert(name, i);
+    let task_matches = |t: &str| {
+        for filt in &target_tasks {
+            if filt == "*" {
+                return true;
+            }
+            if Regex::new(filt).unwrap().is_match(t) {
+                return true;
+            }
+        }
+        false
+    };
+
+    let task_matches_labels = |t: &Value| {
+        if target_labels.is_empty() {
+            return true;
+        }
+
+        for l in t["labels"].as_array().unwrap() {
+            if target_labels.contains(&l.to_string()) {
+                return true;
+            }
+        }
+        false
+    };
+
+    let mut tasknametoid: HashMap<String, usize> = HashMap::new();
+    for (i, t) in workflow_spec["stages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .enumerate()
+    {
+        tasknametoid.insert(t["name"].to_string(), i);
     }
 
-    let mut ok_cache: HashMap<&str, bool> = HashMap::new();
-    let full_target_list: Vec<&Value> = stages
+    let mut cache: HashMap<String, bool> = HashMap::new();
+
+    let mut full_target_list: Vec<&Value> = workflow_spec["stages"]
+        .as_array()
+        .unwrap()
         .iter()
         .filter(|t| {
-            let name = t["name"].as_str().unwrap();
-            task_matches(name, &target_tasks)
-                && task_matches_labels(t, &target_labels)
-                && can_be_done(t, &task_name_to_id, &mut ok_cache, &workflow_spec)
+            task_matches(&t["name"].to_string())
+                && task_matches_labels(t)
+                && can_be_done(t, &workflow_spec, &tasknametoid, &mut cache)
         })
         .collect();
 
-    let full_target_name_list: Vec<&str> = full_target_list
+    let full_target_name_list: Vec<String> = full_target_list
         .iter()
-        .map(|t| t["name"].as_str().unwrap())
+        .map(|t| t["name"].to_string())
         .collect();
 
     let full_requirements_list: Vec<Vec<&Value>> = full_target_list
         .iter()
-        .map(|t| get_all_requirements(t, &task_name_to_id, &workflow_spec))
+        .map(|t| get_all_requirements(t, &workflow_spec, &tasknametoid))
         .collect();
 
-    let full_requirements_name_list: Vec<&str> = full_requirements_list
-        .into_iter()
-        .flatten()
-        .map(|t| t["name"].as_str().unwrap())
+    let full_requirements_name_list: Vec<String> = full_requirements_list
+        .iter()
+        .flat_map(|sublist| sublist.iter().map(|item| item["name"].to_string()))
         .collect();
+
+    let needed_by_targets = |name: &str| -> bool {
+        full_target_name_list.contains(&name.to_string())
+            || full_requirements_name_list.contains(&name.to_string())
+    };
 
     workflow_spec["stages"] = Value::Array(
-        stages
+        workflow_spec["stages"]
+            .as_array()
+            .unwrap()
             .iter()
-            .filter(|l| {
-                needed_by_targets(
-                    l["name"].as_str().unwrap(),
-                    &full_target_name_list,
-                    &full_requirements_name_list,
-                )
-            })
+            .filter(|l| needed_by_targets(&l["name"].to_string()))
             .cloned()
             .collect(),
     );
 
     workflow_spec
-}
-
-fn task_matches(t: &str, target_tasks: &Vec<&str>) -> bool {
-    target_tasks
-        .iter()
-        .any(|&filt| filt == "*" || Regex::new(filt).unwrap().is_match(t))
-}
-
-fn task_matches_labels(t: &Value, target_labels: &Vec<&str>) -> bool {
-    if target_labels.is_empty() {
-        return true;
-    }
-
-    let labels = t["labels"].as_array().unwrap();
-    labels
-        .iter()
-        .any(|l| target_labels.contains(&l.as_str().unwrap()))
-}
-
-fn can_be_done<'a>(
-    t: &'a Value,
-    task_name_to_id: &HashMap<&str, usize>,
-    ok_cache: &mut HashMap<&'a str, bool>,
-    workflow_spec: &'a Value,
-) -> bool {
-    let name = t["name"].as_str().unwrap();
-    if let Some(&ok) = ok_cache.get(name) {
-        return ok;
-    }
-
-    let needs = t["needs"].as_array().unwrap();
-    let ok = needs.iter().all(|r| {
-        let task_id = task_name_to_id.get(r.as_str().unwrap());
-        if let Some(&task_id) = task_id {
-            can_be_done(
-                &workflow_spec["stages"][task_id],
-                task_name_to_id,
-                ok_cache,
-                workflow_spec,
-            )
-        } else {
-            false
-        }
-    });
-
-    ok_cache.insert(name, ok);
-    ok
-}
-
-fn get_all_requirements<'a>(
-    t: &'a Value,
-    task_name_to_id: &'a HashMap<&'a str, usize>,
-    workflow_spec: &'a Value,
-) -> Vec<&'a Value> {
-    let mut l = Vec::new();
-    let needs = t["needs"].as_array().unwrap();
-    for r in needs {
-        let fulltask = &workflow_spec["stages"][task_name_to_id[r.as_str().unwrap()]];
-        l.push(fulltask);
-        l.extend(get_all_requirements(
-            fulltask,
-            task_name_to_id,
-            workflow_spec,
-        ));
-    }
-    l
-}
-
-fn needed_by_targets(
-    name: &str,
-    full_target_name_list: &Vec<&str>,
-    full_requirements_name_list: &Vec<&str>,
-) -> bool {
-    full_target_name_list.contains(&name) || full_requirements_name_list.contains(&name)
 }
