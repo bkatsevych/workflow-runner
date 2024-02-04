@@ -1,6 +1,6 @@
 pub struct Graph {
-    adj_list: Vec<Vec<usize>>,
-    indegree: Vec<usize>,
+    pub adj_list: Vec<Vec<usize>>,
+    pub indegree: Vec<usize>,
 }
 
 impl Graph {
@@ -13,6 +13,6 @@ impl Graph {
             indegree[dest] += 1;
         }
 
-        Self { adj_list, indegree }
+        Graph { adj_list, indegree }
     }
 }
