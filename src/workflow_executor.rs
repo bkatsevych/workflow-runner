@@ -7,8 +7,15 @@ use serde_json::Map;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::env;
-use std::iter::FromIterator;
+// use std::iter::FromIterator;
 use std::process;
+
+#[derive(Debug)]
+struct DAGProperties {
+    nexttasks: HashMap<usize, Vec<usize>>,
+    weights: Vec<(i32, usize)>,
+    topological_ordering: Vec<Vec<usize>>,
+}
 
 pub struct WorkflowExecutor {
     arguments: Arguments,
@@ -17,7 +24,7 @@ pub struct WorkflowExecutor {
     action_logger: Logger,
     metric_logger: Logger,
     workflow_spec: Value,
-    global_init: HashMap<String, Value>,
+    global_init: Map<String, Value>,
 }
 
 impl WorkflowExecutor {
@@ -53,10 +60,10 @@ impl WorkflowExecutor {
             process::exit(0);
         }
 
-        // construct the DAG, compute task weights
-        let workflow = build_dag_properties(&workflow_spec, &action_logger);
+        // // construct the DAG, compute task weights
+        let workflow = build_dag_properties(&workflow_spec);
 
-        println!("{:?}", workflow);
+        println!("Workflow: {:?}", workflow);
 
         WorkflowExecutor {
             arguments,
@@ -70,21 +77,24 @@ impl WorkflowExecutor {
     }
 }
 
-fn extract_global_environment(workflow_spec: &mut Value) -> HashMap<String, Value> {
+fn extract_global_environment(workflow_spec: &mut Value) -> Map<String, Value> {
     let init_index = 0; // this has to be the first task in the workflow
-    let mut globalenv = HashMap::new();
-    let mut initcmd = None;
+    let mut global_env = serde_json::Map::new();
+    let mut init_cmd = None;
 
     if workflow_spec["stages"][init_index]["name"] == "__global_init_task__" {
-        let env = workflow_spec["stages"][init_index].get("env").cloned();
-        if let Some(e) = env {
-            if let Some(e) = e.as_object() {
-                globalenv = e.clone().into_iter().collect();
+        if let Some(env) = workflow_spec["stages"][init_index].get("env") {
+            if let Some(env_map) = env.as_object() {
+                for (key, value) in env_map {
+                    global_env.insert(key.clone(), value.clone());
+                }
             }
         }
-        let cmd = workflow_spec["stages"][init_index].get("cmd").cloned();
-        if cmd != Some(Value::String("NO-COMMAND".to_string())) {
-            initcmd = cmd;
+
+        if let Some(cmd) = workflow_spec["stages"][init_index].get("cmd") {
+            if cmd != "NO-COMMAND" {
+                init_cmd = Some(cmd.clone());
+            }
         }
 
         workflow_spec["stages"]
@@ -93,15 +103,9 @@ fn extract_global_environment(workflow_spec: &mut Value) -> HashMap<String, Valu
             .remove(init_index);
     }
 
-    let mut result = HashMap::from_iter(globalenv.clone().into_iter());
-    result.insert(
-        "env".to_string(),
-        Value::Object(serde_json::Map::from_iter(globalenv.clone().into_iter())),
-    );
-    if let Some(cmd) = initcmd {
-        result.insert("cmd".to_string(), cmd);
-    }
-
+    let mut result = serde_json::Map::new();
+    result.insert("env".to_string(), Value::Object(global_env));
+    result.insert("cmd".to_string(), init_cmd.unwrap_or(Value::Null));
     result
 }
 
@@ -200,7 +204,7 @@ fn filter_workflow(
 
     let mut cache: HashMap<String, bool> = HashMap::new();
 
-    let mut full_target_list: Vec<&Value> = workflow_spec["stages"]
+    let full_target_list: Vec<&Value> = workflow_spec["stages"]
         .as_array()
         .unwrap()
         .iter()
@@ -244,59 +248,31 @@ fn filter_workflow(
     workflow_spec
 }
 
-fn find_all_dependent_tasks(
-    possiblenexttask: &HashMap<String, Vec<String>>,
-    tid: &str,
-    cache: &mut HashMap<String, Vec<String>>,
-) -> Vec<String> {
-    if let Some(c) = cache.get(tid) {
-        return c.clone();
-    }
-
-    let mut daughterlist = vec![tid.to_string()];
-    if let Some(tasks) = possiblenexttask.get(tid) {
-        for n in tasks {
-            let mut c = if let Some(cached) = cache.get(n) {
-                cached.clone()
-            } else {
-                find_all_dependent_tasks(possiblenexttask, n, cache)
-            };
-            daughterlist.append(&mut c);
-            cache.insert(n.to_string(), c);
-        }
-    }
-
-    cache.insert(tid.to_string(), daughterlist.clone());
-    daughterlist.sort();
-    daughterlist.dedup();
-    daughterlist
-}
-
 fn find_all_topological_orders(
     graph: &mut Graph,
     path: &mut Vec<usize>,
     discovered: &mut Vec<bool>,
     n: usize,
-    allpaths: &mut Vec<Vec<usize>>,
-    maxnumber: usize,
+    all_paths: &mut Vec<Vec<usize>>,
+    max_number: usize,
 ) {
-    if allpaths.len() >= maxnumber {
+    if all_paths.len() >= max_number {
         return;
     }
 
     for v in 0..n {
         if graph.indegree[v] == 0 && !discovered[v] {
-            for u in &graph.adj_list[v] {
-                graph.indegree[*u] -= 1;
+            for &u in &graph.adj_list[v] {
+                graph.indegree[u] -= 1;
             }
 
             path.push(v);
             discovered[v] = true;
 
-            find_all_topological_orders(graph, path, discovered, n, allpaths, maxnumber);
+            find_all_topological_orders(graph, path, discovered, n, all_paths, max_number);
 
-            for u in &graph.adj_list[v] {
-                graph.indegree[*u] += 1;
+            for &u in &graph.adj_list[v] {
+                graph.indegree[u] += 1;
             }
 
             path.pop();
@@ -305,69 +281,80 @@ fn find_all_topological_orders(
     }
 
     if path.len() == n {
-        allpaths.push(path.clone());
+        all_paths.push(path.clone());
     }
 }
 
-fn print_all_topological_orders(graph: &mut Graph, maxnumber: usize) -> Vec<Vec<usize>> {
+fn print_all_topological_orders(graph: &mut Graph, max_number: usize) -> Vec<Vec<usize>> {
     let n = graph.adj_list.len();
     let mut discovered = vec![false; n];
-    let mut path = Vec::new();
-    let mut allpaths = Vec::new();
+    let mut path = vec![];
+    let mut all_paths = vec![];
 
     find_all_topological_orders(
         graph,
         &mut path,
         &mut discovered,
         n,
-        &mut allpaths,
-        maxnumber,
+        &mut all_paths,
+        max_number,
     );
 
-    allpaths
+    all_paths
 }
 
 fn analyse_graph(
     edges: &[(usize, usize)],
-    nodes: &[usize],
+    nodes: &mut Vec<usize>,
 ) -> (Vec<Vec<usize>>, HashMap<usize, Vec<usize>>) {
     let n = nodes.len();
-    let mut nextjobtrivial = HashMap::new();
-    nextjobtrivial.insert(usize::MAX, nodes.to_vec());
+    let mut next_job_trivial = HashMap::new();
+    next_job_trivial.insert(-1i32, nodes.clone());
 
     for &(src, dest) in edges {
-        nextjobtrivial
-            .entry(src)
-            .or_insert_with(Vec::new)
+        next_job_trivial
+            .entry(src as i32)
+            .or_insert(vec![])
             .push(dest);
-        if let Some(vec) = nextjobtrivial.get_mut(&usize::MAX) {
-            vec.retain(|&x| x != dest);
+        if let Some(pos) = next_job_trivial
+            .get_mut(&-1i32)
+            .unwrap()
+            .iter()
+            .position(|&x| x == dest)
+        {
+            next_job_trivial.get_mut(&-1i32).unwrap().remove(pos);
         }
     }
 
     let mut graph = Graph::new(edges, n);
     let orderings = print_all_topological_orders(&mut graph, 1);
 
-    (orderings, nextjobtrivial)
-}
-
-fn build_graph(taskuniverse: &[(Value, usize)]) -> (Vec<(usize, usize)>, Vec<usize>) {
-    let tasktoid: HashMap<String, usize> = taskuniverse
-        .iter()
-        .map(|(l, i)| (l["name"].as_str().unwrap().to_string(), *i))
+    let next_job_trivial: HashMap<usize, Vec<usize>> = next_job_trivial
+        .into_iter()
+        .map(|(k, v)| (k as usize, v))
         .collect();
 
-    let mut nodes = Vec::new();
-    let mut edges = Vec::new();
+    (orderings, next_job_trivial)
+}
 
-    for (l, _) in taskuniverse {
-        let name = l["name"].as_str().unwrap();
-        nodes.push(tasktoid[name]);
+fn build_graph(task_universe: &[(serde_json::Value, usize)]) -> (Vec<(usize, usize)>, Vec<usize>) {
+    let task_to_id: HashMap<String, usize> = task_universe
+        .iter()
+        .enumerate()
+        .map(|(i, (t, _))| (t["name"].as_str().unwrap().to_string(), i))
+        .collect();
 
-        if let Some(needs) = l["needs"].as_array() {
+    let mut nodes = vec![];
+    let mut edges = vec![];
+
+    for (t, _) in task_universe {
+        let node = task_to_id[t["name"].as_str().unwrap()];
+        nodes.push(node);
+
+        if let Some(needs) = t["needs"].as_array() {
             for n in needs {
-                let n_str = n.as_str().unwrap();
-                edges.push((tasktoid[n_str], tasktoid[name]));
+                let edge = (task_to_id[n.as_str().unwrap()], node);
+                edges.push(edge);
             }
         }
     }
@@ -375,68 +362,81 @@ fn build_graph(taskuniverse: &[(Value, usize)]) -> (Vec<(usize, usize)>, Vec<usi
     (edges, nodes)
 }
 
-fn build_dag_properties(workflowspec: &Value, action_logger: &Logger) -> HashMap<String, Value> {
-    let globaltaskuniverse: Vec<(Value, usize)> = workflowspec["stages"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .enumerate()
-        .map(|(i, l)| (l.clone(), i))
-        .collect();
+fn find_all_dependent_tasks(
+    possiblenexttask: &HashMap<usize, Vec<usize>>,
+    tid: usize,
+    cache: &mut HashMap<usize, Vec<usize>>,
+) -> Vec<usize> {
+    if let Some(c) = cache.get(&tid) {
+        return c.clone();
+    }
+
+    let mut daughterlist = vec![tid];
+    if let Some(next_tasks) = possiblenexttask.get(&tid) {
+        for &n in next_tasks {
+            let mut c = if let Some(cached) = cache.get(&n) {
+                cached.clone()
+            } else {
+                find_all_dependent_tasks(possiblenexttask, n, cache)
+            };
+            daughterlist.append(&mut c);
+            cache.insert(n, c.clone());
+        }
+    }
+
+    cache.insert(tid, daughterlist.clone());
+    daughterlist.sort();
+    daughterlist.dedup();
+    daughterlist
+}
+
+fn build_dag_properties(workflow_spec: &Value) -> DAGProperties {
+    let mut globaltaskuniverse = Vec::new();
+
+    if let Some(stages) = workflow_spec["stages"].as_array() {
+        for (i, l) in stages.iter().enumerate() {
+            globaltaskuniverse.push((l.clone(), i + 1));
+        }
+    }
 
     let (edges, nodes) = build_graph(&globaltaskuniverse);
-    let (orderings, global_next_tasks) = analyse_graph(&edges, &nodes);
+    let tup = analyse_graph(&edges, &mut nodes.clone());
 
-    let global_next_tasks_str: HashMap<String, Vec<String>> = global_next_tasks
-        .iter()
-        .map(|(k, v)| (k.to_string(), v.iter().map(|i| i.to_string()).collect()))
-        .collect();
-
+    let global_next_tasks = tup.1;
     let mut dependency_cache = HashMap::new();
 
-    fn getweight(
+    fn get_weight(
         tid: usize,
-        globaltaskuniverse: &[(Value, usize)],
-        global_next_tasks: &HashMap<String, Vec<String>>,
-        dependency_cache: &mut HashMap<String, Vec<String>>,
-    ) -> (Value, usize) {
-        let timeframe = globaltaskuniverse[tid].0["timeframe"].clone();
-        let dependent_tasks =
-            find_all_dependent_tasks(global_next_tasks, &tid.to_string(), dependency_cache);
+        globaltaskuniverse: &Vec<(Value, usize)>,
+        global_next_tasks: &HashMap<usize, Vec<usize>>,
+        dependency_cache: &mut HashMap<usize, Vec<usize>>,
+    ) -> (i32, usize) {
+        let timeframe = globaltaskuniverse[tid].0["timeframe"].as_i64().unwrap() as i32;
+        let dependent_tasks = find_all_dependent_tasks(global_next_tasks, tid, dependency_cache);
         (timeframe, dependent_tasks.len())
     }
 
-    let task_weights: Vec<(Value, usize)> = (0..globaltaskuniverse.len())
+    let task_weights: Vec<(i32, usize)> = (0..globaltaskuniverse.len())
         .map(|tid| {
-            getweight(
+            get_weight(
                 tid,
                 &globaltaskuniverse,
-                &global_next_tasks_str,
+                &global_next_tasks,
                 &mut dependency_cache,
             )
         })
         .collect();
 
     for tid in 0..globaltaskuniverse.len() {
-        action_logger.info(&format!(
+        println!(
             "Score for {} is {:?}",
             globaltaskuniverse[tid].0["name"], task_weights[tid]
-        ));
+        );
     }
 
-    let mut result = HashMap::new();
-    result.insert(
-        "nexttasks".to_string(),
-        serde_json::to_value(global_next_tasks_str).unwrap(),
-    );
-    result.insert(
-        "weights".to_string(),
-        serde_json::to_value(task_weights).unwrap(),
-    );
-    result.insert(
-        "topological_ordering".to_string(),
-        serde_json::to_value(orderings).unwrap(),
-    );
-
-    result
+    DAGProperties {
+        nexttasks: global_next_tasks,
+        weights: task_weights,
+        topological_ordering: tup.0,
+    }
 }
