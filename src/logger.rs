@@ -23,7 +23,7 @@ impl Logger {
     pub fn log(&self, level: &LogLevel, message: &str) {
         let now: DateTime<Local> = Local::now();
         let formatted_time = now.format("%Y-%m-%d %H:%M:%S").to_string();
-        let log_message = format!("{:?} {:?} {}\n", formatted_time, level, message);
+        let log_message = format!("{:?} {:?} {}", formatted_time, level, message);
 
         let mut file = OpenOptions::new()
             .write(true)
