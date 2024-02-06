@@ -7,6 +7,7 @@ use serde_json::Map;
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::env;
+use std::error::Error;
 // use std::iter::FromIterator;
 use std::process;
 
@@ -25,6 +26,12 @@ pub struct WorkflowExecutor {
     metric_logger: Logger,
     workflow_spec: Value,
     global_init: Map<String, Value>,
+    possiblenexttask: HashMap<isize, Vec<isize>>,
+    taskweights: Vec<(i32, i32)>,
+    topological_orderings: Vec<Vec<isize>>,
+    taskuniverse: Vec<String>,
+    id_to_task: Vec<String>,
+    task_to_id: HashMap<String, usize>,
 }
 
 impl WorkflowExecutor {
@@ -60,10 +67,34 @@ impl WorkflowExecutor {
             process::exit(0);
         }
 
-        // // construct the DAG, compute task weights
+        // construct the DAG, compute task weights
         let workflow = build_dag_properties(&workflow_spec, &action_logger);
 
-        println!("Workflow: {:?}", workflow);
+        // TODO:
+        // visualize workflow
+
+        let possiblenexttask = workflow.next_tasks;
+        let taskweights = workflow.weights;
+        let topological_orderings = workflow.topological_ordering;
+        let taskuniverse: Vec<String> = workflow_spec["stages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|l| l["name"].as_str().unwrap().to_string())
+            .collect();
+
+        // construct task ID <-> task name lookup
+        let mut id_to_task: Vec<String> = vec!["".to_string(); taskuniverse.len()];
+        let mut task_to_id: HashMap<String, usize> = HashMap::new();
+
+        for (i, name) in taskuniverse.iter().enumerate() {
+            task_to_id.insert(name.clone(), i);
+            id_to_task[i] = name.clone();
+        }
+
+        if arguments.update_resources.is_some() {
+            update_resource_estimates(&mut workflow_spec, &arguments.update_resources);
+        }
 
         WorkflowExecutor {
             arguments,
@@ -73,6 +104,12 @@ impl WorkflowExecutor {
             metric_logger,
             workflow_spec,
             global_init,
+            possiblenexttask,
+            taskweights,
+            topological_orderings,
+            taskuniverse,
+            id_to_task,
+            task_to_id,
         }
     }
 }
@@ -424,5 +461,48 @@ fn build_dag_properties(workflow_spec: &Value, action_logger: &Logger) -> DagPro
         next_tasks: global_next_tasks,
         weights: task_weights,
         topological_ordering,
+    }
+}
+
+fn update_resource_estimates(workflow: &mut Value, resource_json: &Option<String>) {
+    if let Some(resource_json) = resource_json {
+        let resource_dict: HashMap<String, Value> = serde_json::from_str(resource_json).unwrap();
+        let stages = workflow["stages"].as_array_mut().unwrap();
+
+        for task in stages.iter_mut() {
+            let timeframe = task["timeframe"].as_f64().unwrap();
+            let mut name = task["name"].as_str().unwrap().to_string();
+
+            if timeframe >= 1.0 {
+                let split_name: Vec<&str> = name.split('_').collect();
+                name = split_name[..split_name.len() - 1].join("_");
+            }
+
+            if let Some(new_resources) = resource_dict.get(&name) {
+                // memory
+                if let Some(newmem) = new_resources.get("mem") {
+                    let oldmem = task["resources"]["mem"].as_f64().unwrap();
+                    println!(
+                        "Updating mem estimate for {} from {} to {}",
+                        name, oldmem, newmem
+                    );
+                    task["resources"]["mem"] = newmem.clone();
+                }
+
+                // cpu
+                if let Some(newcpu) = new_resources.get("cpu") {
+                    let mut newcpu = newcpu.as_f64().unwrap();
+                    let oldcpu = task["resources"]["cpu"].as_f64().unwrap();
+                    if let Some(rel_cpu) = task["resources"]["relative_cpu"].as_f64() {
+                        newcpu *= rel_cpu;
+                    }
+                    println!(
+                        "Updating cpu estimate for {} from {} to {}",
+                        name, oldcpu, newcpu
+                    );
+                    task["resources"]["cpu"] = Value::from(newcpu);
+                }
+            }
+        }
     }
 }

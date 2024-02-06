@@ -16,8 +16,6 @@ fn main() {
     // defining command line options
     let arguments = Arguments::parse();
 
-    println!("{:?}", arguments);
-
     // first file logger
     let action_logger = Logger::new(
         format!("pipeline_action_{}.log", process::id()),
