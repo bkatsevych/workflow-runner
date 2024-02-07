@@ -96,6 +96,8 @@ impl WorkflowExecutor {
             update_resource_estimates(&mut workflow_spec, &arguments.update_resources);
         }
 
+        // construct the object that is in charge of resource management...
+
         WorkflowExecutor {
             arguments,
             is_production_mode,
