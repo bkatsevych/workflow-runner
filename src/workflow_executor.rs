@@ -1,13 +1,13 @@
 use crate::arguments::Arguments;
 use crate::graph::Graph;
 use crate::logger::Logger;
+use crate::resource_manager::ResourceManager;
 use crate::utils::load_json;
 use regex::Regex;
 use serde_json::Map;
-use serde_json::Value;
+pub use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::env;
-use std::error::Error;
 // use std::iter::FromIterator;
 use std::process;
 
@@ -32,11 +32,12 @@ pub struct WorkflowExecutor {
     taskuniverse: Vec<String>,
     id_to_task: Vec<String>,
     task_to_id: HashMap<String, usize>,
+    resource_manager: ResourceManager,
 }
 
 impl WorkflowExecutor {
     pub fn new(arguments: Arguments, action_logger: Logger, metric_logger: Logger) -> Self {
-        let is_production_mode = arguments.production_mode;
+        let is_production_mode = arguments.production_mode.clone();
         let workflow_file: String = arguments.workflow_file.clone();
         let mut workflow_spec = load_json(workflow_file.as_str()).unwrap();
         let global_init = extract_global_environment(&mut workflow_spec);
@@ -97,6 +98,26 @@ impl WorkflowExecutor {
         }
 
         // construct the object that is in charge of resource management...
+        let mut resource_manager = ResourceManager::new(
+            arguments.cpu_limit.clone(),
+            arguments.mem_limit.clone(),
+            arguments.maxjobs.clone(),
+            arguments.dynamic_resources.clone(),
+            arguments.optimistic_resources.clone(),
+        );
+
+        if let Some(stages) = workflow_spec["stages"].as_array() {
+            for task in stages {
+                // ...and add all initial resource estimates
+                let task = task.as_object().unwrap();
+                let name = task["name"].as_str().unwrap();
+                let global_task_name = get_global_task_name(name);
+                let cpu = task["resources"]["cpu"].as_f64().unwrap();
+                let mem = task["resources"]["mem"].as_f64().unwrap();
+                let semaphore = task.get("semaphore").map_or("", |v| v.as_str().unwrap());
+                resource_manager.add_task_resources(name, &global_task_name, cpu, mem, semaphore);
+            }
+        }
 
         WorkflowExecutor {
             arguments,
@@ -112,6 +133,7 @@ impl WorkflowExecutor {
             taskuniverse,
             id_to_task,
             task_to_id,
+            resource_manager,
         }
     }
 }
@@ -506,5 +528,13 @@ fn update_resource_estimates(workflow: &mut Value, resource_json: &Option<String
                 }
             }
         }
+    }
+}
+
+fn get_global_task_name(name: &str) -> String {
+    let tokens: Vec<&str> = name.split("_").collect();
+    match tokens.last().unwrap().parse::<i32>() {
+        Ok(_) => tokens[..tokens.len() - 1].join("_"),
+        Err(_) => name.to_string(),
     }
 }

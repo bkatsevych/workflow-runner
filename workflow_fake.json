@@ -1,1419 +1,1128 @@
 {
-  "stages": [
-    {
-      "name": "__global_init_task__",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [],
-      "resources": {
-        "cpu": 1,
-        "relative_cpu": null,
-        "mem": 500
-      },
-      "timeframe": -1,
-      "labels": [],
-      "cwd": "./",
-      "env": {
-        "ALICEO2_CCDB_CONDITION_NOT_AFTER": 3385078236000,
-        "ALICEO2_CCDB_LOCALCACHE": "/Users/desyrel/Documents/CERN/O2DPG/ccdb",
-        "IGNORE_VALIDITYCHECK_OF_CCDB_LOCALCACHE": "${ALICEO2_CCDB_LOCALCACHE:+\"ON\"}"
-      }
-    },
-    {
-      "name": "grpcreate",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [],
-      "resources": {
-        "cpu": "0",
-        "relative_cpu": null,
-        "mem": 500
-      },
-      "timeframe": -1,
-      "labels": [],
-      "cwd": "./"
-    },
-    {
-      "name": "tpc_spacecharge_downloader",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [],
-      "resources": {
-        "cpu": "0",
-        "relative_cpu": null,
-        "mem": 500
-      },
-      "timeframe": -1,
-      "labels": [],
-      "cwd": "./"
-    },
-    {
-      "name": "precollcontext_1",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "grpcreate"
-      ],
-      "resources": {
-        "cpu": "1",
-        "relative_cpu": null,
-        "mem": 500
-      },
-      "timeframe": 1,
-      "labels": [],
-      "cwd": "tf1"
-    },
-    {
-      "name": "gensgnconf_1",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [],
-      "resources": {
-        "cpu": 1,
-        "relative_cpu": null,
-        "mem": 500
-      },
-      "timeframe": 1,
-      "labels": [],
-      "cwd": "tf1"
-    },
-    {
-      "name": "sgnsim_1",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "gensgnconf_1",
-        "grpcreate"
-      ],
-      "resources": {
-        "cpu": 7.0,
-        "relative_cpu": 0.875,
-        "mem": "4000"
-      },
-      "timeframe": 1,
-      "labels": [
-        "GEANT"
-      ],
-      "cwd": "tf1"
-    },
-    {
-      "name": "linkGRP_1",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "sgnsim_1"
-      ],
-      "resources": {
-        "cpu": "0",
-        "relative_cpu": null,
-        "mem": "0"
-      },
-      "timeframe": 1,
-      "labels": [],
-      "cwd": "tf1"
-    },
-    {
-      "name": "digicontext_1",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "linkGRP_1",
-        "sgnsim_1"
-      ],
-      "resources": {
-        "cpu": "1",
-        "relative_cpu": null,
-        "mem": 500
-      },
-      "timeframe": 1,
-      "labels": [
-        "DIGI"
-      ],
-      "cwd": "tf1"
-    },
-    {
-      "name": "tpcdigi_1",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "digicontext_1",
-        "linkGRP_1",
-        "tpc_spacecharge_downloader"
-      ],
-      "resources": {
-        "cpu": 8,
-        "relative_cpu": null,
-        "mem": "9000"
-      },
-      "timeframe": 1,
-      "labels": [
-        "DIGI"
-      ],
-      "cwd": "tf1"
-    },
-    {
-      "name": "trddigi_1",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "digicontext_1"
-      ],
-      "resources": {
-        "cpu": 8,
-        "relative_cpu": null,
-        "mem": "8000"
-      },
-      "timeframe": 1,
-      "labels": [
-        "DIGI"
-      ],
-      "cwd": "tf1"
-    },
-    {
-      "name": "restdigi_1",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "digicontext_1"
-      ],
-      "resources": {
-        "cpu": "1",
-        "relative_cpu": null,
-        "mem": 500
-      },
-      "timeframe": 1,
-      "labels": [
-        "DIGI",
-        "SMALLDIGI"
-      ],
-      "cwd": "tf1"
-    },
-    {
-      "name": "ft0fv0emcctp_digi_1",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "digicontext_1"
-      ],
-      "resources": {
-        "cpu": "1",
-        "relative_cpu": null,
-        "mem": 500
-      },
-      "timeframe": 1,
-      "labels": [
-        "DIGI",
-        "SMALLDIGI"
-      ],
-      "cwd": "tf1"
-    },
-    {
-      "name": "tpcclusterpart0_1",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "tpcdigi_1"
-      ],
-      "resources": {
-        "cpu": "2",
-        "relative_cpu": null,
-        "mem": "8000"
-      },
-      "timeframe": 1,
-      "labels": [
-        "RECO"
-      ],
-      "cwd": "tf1",
-      "env": {
-        "OMP_NUM_THREADS": "4",
-        "SHMSIZE": "16000000000"
-      },
-      "semaphore": "tpctriggers.root",
-      "retry_count": 2
-    },
-    {
-      "name": "tpcclusterpart1_1",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "tpcdigi_1"
-      ],
-      "resources": {
-        "cpu": "2",
-        "relative_cpu": null,
-        "mem": "8000"
-      },
-      "timeframe": 1,
-      "labels": [
-        "RECO"
-      ],
-      "cwd": "tf1",
-      "env": {
-        "OMP_NUM_THREADS": "4",
-        "SHMSIZE": "16000000000"
-      },
-      "semaphore": "tpctriggers.root",
-      "retry_count": 2
-    },
-    {
-      "name": "tpcclustermerge_1",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "tpcclusterpart0_1",
-        "tpcclusterpart1_1"
-      ],
-      "resources": {
-        "cpu": "1",
-        "relative_cpu": null,
-        "mem": "10000"
-      },
-      "timeframe": 1,
-      "labels": [
-        "RECO"
-      ],
-      "cwd": "tf1"
-    },
-    {
-      "name": "tpcreco_1",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "tpcclustermerge_1"
-      ],
-      "resources": {
-        "cpu": 3.0,
-        "relative_cpu": 0.375,
-        "mem": "16000"
-      },
-      "timeframe": 1,
-      "labels": [
-        "RECO"
-      ],
-      "cwd": "tf1"
-    },
-    {
-      "name": "itsreco_1",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "restdigi_1"
-      ],
-      "resources": {
-        "cpu": "1",
-        "relative_cpu": null,
-        "mem": "2000"
-      },
-      "timeframe": 1,
-      "labels": [
-        "RECO"
-      ],
-      "cwd": "tf1"
-    },
-    {
-      "name": "ft0reco_1",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "ft0fv0emcctp_digi_1"
-      ],
-      "resources": {
-        "cpu": 1,
-        "relative_cpu": null,
-        "mem": "1000"
-      },
-      "timeframe": 1,
-      "labels": [
-        "RECO"
-      ],
-      "cwd": "tf1"
-    },
-    {
-      "name": "itstpcMatch_1",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "tpcreco_1",
-        "itsreco_1",
-        "ft0reco_1"
-      ],
-      "resources": {
-        "cpu": 3.0,
-        "relative_cpu": 0.375,
-        "mem": "8000"
-      },
-      "timeframe": 1,
-      "labels": [
-        "RECO"
-      ],
-      "cwd": "tf1"
-    },
-    {
-      "name": "trdreco_1",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "trddigi_1",
-        "itstpcMatch_1",
-        "tpcreco_1",
-        "itsreco_1"
-      ],
-      "resources": {
-        "cpu": "1",
-        "relative_cpu": null,
-        "mem": "2000"
-      },
-      "timeframe": 1,
-      "labels": [
-        "RECO"
-      ],
-      "cwd": "tf1"
-    },
-    {
-      "name": "trdreco2_1",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "trdreco_1"
-      ],
-      "resources": {
-        "cpu": "1",
-        "relative_cpu": null,
-        "mem": "2000"
-      },
-      "timeframe": 1,
-      "labels": [
-        "RECO"
-      ],
-      "cwd": "tf1"
-    },
-    {
-      "name": "tofmatch_1",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "itstpcMatch_1",
-        "restdigi_1"
-      ],
-      "resources": {
-        "cpu": 1,
-        "relative_cpu": null,
-        "mem": "1500"
-      },
-      "timeframe": 1,
-      "labels": [
-        "RECO"
-      ],
-      "cwd": "tf1"
-    },
-    {
-      "name": "toftpcmatch_1",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "tofmatch_1",
-        "tpcreco_1",
-        "trdreco2_1"
-      ],
-      "resources": {
-        "cpu": 1,
-        "relative_cpu": null,
-        "mem": "1000"
-      },
-      "timeframe": 1,
-      "labels": [
-        "RECO"
-      ],
-      "cwd": "tf1"
-    },
-    {
-      "name": "mftreco_1",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "restdigi_1"
-      ],
-      "resources": {
-        "cpu": 1,
-        "relative_cpu": null,
-        "mem": "1500"
-      },
-      "timeframe": 1,
-      "labels": [
-        "RECO"
-      ],
-      "cwd": "tf1"
-    },
-    {
-      "name": "mchreco_1",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "restdigi_1"
-      ],
-      "resources": {
-        "cpu": 1,
-        "relative_cpu": null,
-        "mem": "1500"
-      },
-      "timeframe": 1,
-      "labels": [
-        "RECO"
-      ],
-      "cwd": "tf1"
-    },
-    {
-      "name": "midreco_1",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "restdigi_1"
-      ],
-      "resources": {
-        "cpu": 1,
-        "relative_cpu": null,
-        "mem": "1500"
-      },
-      "timeframe": 1,
-      "labels": [
-        "RECO"
-      ],
-      "cwd": "tf1"
-    },
-    {
-      "name": "fddreco_1",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "restdigi_1"
-      ],
-      "resources": {
-        "cpu": 1,
-        "relative_cpu": null,
-        "mem": "1500"
-      },
-      "timeframe": 1,
-      "labels": [
-        "RECO"
-      ],
-      "cwd": "tf1"
-    },
-    {
-      "name": "fv0reco_1",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "ft0fv0emcctp_digi_1"
-      ],
-      "resources": {
-        "cpu": 1,
-        "relative_cpu": null,
-        "mem": "1500"
-      },
-      "timeframe": 1,
-      "labels": [
-        "RECO"
-      ],
-      "cwd": "tf1"
-    },
-    {
-      "name": "emcalreco_1",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "ft0fv0emcctp_digi_1"
-      ],
-      "resources": {
-        "cpu": 1,
-        "relative_cpu": null,
-        "mem": "1500"
-      },
-      "timeframe": 1,
-      "labels": [
-        "RECO"
-      ],
-      "cwd": "tf1"
-    },
-    {
-      "name": "phsreco_1",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "restdigi_1"
-      ],
-      "resources": {
-        "cpu": 1,
-        "relative_cpu": null,
-        "mem": "1500"
-      },
-      "timeframe": 1,
-      "labels": [
-        "RECO"
-      ],
-      "cwd": "tf1"
-    },
-    {
-      "name": "cpvreco_1",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "restdigi_1"
-      ],
-      "resources": {
-        "cpu": 1,
-        "relative_cpu": null,
-        "mem": "1500"
-      },
-      "timeframe": 1,
-      "labels": [
-        "RECO"
-      ],
-      "cwd": "tf1"
-    },
-    {
-      "name": "mchmidMatch_1",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "mchreco_1",
-        "midreco_1"
-      ],
-      "resources": {
-        "cpu": 1,
-        "relative_cpu": null,
-        "mem": "1500"
-      },
-      "timeframe": 1,
-      "labels": [
-        "RECO"
-      ],
-      "cwd": "tf1"
-    },
-    {
-      "name": "mftmchMatch_1",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "mchmidMatch_1",
-        "mftreco_1"
-      ],
-      "resources": {
-        "cpu": 1,
-        "relative_cpu": null,
-        "mem": "1500"
-      },
-      "timeframe": 1,
-      "labels": [
-        "RECO"
-      ],
-      "cwd": "tf1"
-    },
-    {
-      "name": "hmpreco_1",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "restdigi_1"
-      ],
-      "resources": {
-        "cpu": 1,
-        "relative_cpu": null,
-        "mem": "1000"
-      },
-      "timeframe": 1,
-      "labels": [
-        "RECO"
-      ],
-      "cwd": "tf1"
-    },
-    {
-      "name": "hmpmatch_1",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "hmpreco_1",
-        "itstpcMatch_1",
-        "toftpcmatch_1"
-      ],
-      "resources": {
-        "cpu": 1,
-        "relative_cpu": null,
-        "mem": "1000"
-      },
-      "timeframe": 1,
-      "labels": [
-        "RECO"
-      ],
-      "cwd": "tf1"
-    },
-    {
-      "name": "pvfinder_1",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "itstpcMatch_1",
-        "midreco_1",
-        "mchmidMatch_1",
-        "ft0reco_1",
-        "fv0reco_1",
-        "ft0reco_1",
-        "emcalreco_1",
-        "phsreco_1",
-        "cpvreco_1",
-        "toftpcmatch_1",
-        "mftreco_1",
-        "mchreco_1",
-        "trdreco2_1",
-        "fddreco_1",
-        "mftmchMatch_1"
-      ],
-      "resources": {
-        "cpu": 8,
-        "relative_cpu": null,
-        "mem": "4000"
-      },
-      "timeframe": 1,
-      "labels": [
-        "RECO"
-      ],
-      "cwd": "tf1"
-    },
-    {
-      "name": "svfinder_1",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "pvfinder_1"
-      ],
-      "resources": {
-        "cpu": 1,
-        "relative_cpu": null,
-        "mem": "5000"
-      },
-      "timeframe": 1,
-      "labels": [
-        "RECO"
-      ],
-      "cwd": "tf1"
-    },
-    {
-      "name": "aod_1",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "pvfinder_1",
-        "svfinder_1",
-        "fv0reco_1",
-        "tofmatch_1",
-        "trdreco2_1",
-        "emcalreco_1",
-        "cpvreco_1",
-        "phsreco_1",
-        "midreco_1",
-        "mchmidMatch_1",
-        "hmpmatch_1"
-      ],
-      "resources": {
-        "cpu": "1",
-        "relative_cpu": null,
-        "mem": "4000"
-      },
-      "timeframe": 1,
-      "labels": [
-        "AOD"
-      ],
-      "cwd": "tf1"
-    },
-    {
-      "name": "precollcontext_2",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "grpcreate"
-      ],
-      "resources": {
-        "cpu": "1",
-        "relative_cpu": null,
-        "mem": 500
-      },
-      "timeframe": 2,
-      "labels": [],
-      "cwd": "tf2"
-    },
-    {
-      "name": "gensgnconf_2",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [],
-      "resources": {
-        "cpu": 1,
-        "relative_cpu": null,
-        "mem": 500
-      },
-      "timeframe": 2,
-      "labels": [],
-      "cwd": "tf2"
-    },
-    {
-      "name": "sgnsim_2",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "gensgnconf_2",
-        "grpcreate"
-      ],
-      "resources": {
-        "cpu": 7.0,
-        "relative_cpu": 0.875,
-        "mem": "4000"
-      },
-      "timeframe": 2,
-      "labels": [
-        "GEANT"
-      ],
-      "cwd": "tf2"
-    },
-    {
-      "name": "linkGRP_2",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "sgnsim_2"
-      ],
-      "resources": {
-        "cpu": "0",
-        "relative_cpu": null,
-        "mem": "0"
-      },
-      "timeframe": 2,
-      "labels": [],
-      "cwd": "tf2"
-    },
-    {
-      "name": "digicontext_2",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "linkGRP_2",
-        "sgnsim_2"
-      ],
-      "resources": {
-        "cpu": "1",
-        "relative_cpu": null,
-        "mem": 500
-      },
-      "timeframe": 2,
-      "labels": [
-        "DIGI"
-      ],
-      "cwd": "tf2"
-    },
-    {
-      "name": "tpcdigi_2",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "digicontext_2",
-        "linkGRP_2",
-        "tpc_spacecharge_downloader"
-      ],
-      "resources": {
-        "cpu": 8,
-        "relative_cpu": null,
-        "mem": "9000"
-      },
-      "timeframe": 2,
-      "labels": [
-        "DIGI"
-      ],
-      "cwd": "tf2"
-    },
-    {
-      "name": "trddigi_2",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "digicontext_2"
-      ],
-      "resources": {
-        "cpu": 8,
-        "relative_cpu": null,
-        "mem": "8000"
-      },
-      "timeframe": 2,
-      "labels": [
-        "DIGI"
-      ],
-      "cwd": "tf2"
-    },
-    {
-      "name": "restdigi_2",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "digicontext_2"
-      ],
-      "resources": {
-        "cpu": "1",
-        "relative_cpu": null,
-        "mem": 500
-      },
-      "timeframe": 2,
-      "labels": [
-        "DIGI",
-        "SMALLDIGI"
-      ],
-      "cwd": "tf2"
-    },
-    {
-      "name": "ft0fv0emcctp_digi_2",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "digicontext_2"
-      ],
-      "resources": {
-        "cpu": "1",
-        "relative_cpu": null,
-        "mem": 500
-      },
-      "timeframe": 2,
-      "labels": [
-        "DIGI",
-        "SMALLDIGI"
-      ],
-      "cwd": "tf2"
-    },
-    {
-      "name": "tpcclusterpart0_2",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "tpcdigi_2"
-      ],
-      "resources": {
-        "cpu": "2",
-        "relative_cpu": null,
-        "mem": "8000"
-      },
-      "timeframe": 2,
-      "labels": [
-        "RECO"
-      ],
-      "cwd": "tf2",
-      "env": {
-        "OMP_NUM_THREADS": "4",
-        "SHMSIZE": "16000000000"
-      },
-      "semaphore": "tpctriggers.root",
-      "retry_count": 2
-    },
-    {
-      "name": "tpcclusterpart1_2",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "tpcdigi_2"
-      ],
-      "resources": {
-        "cpu": "2",
-        "relative_cpu": null,
-        "mem": "8000"
-      },
-      "timeframe": 2,
-      "labels": [
-        "RECO"
-      ],
-      "cwd": "tf2",
-      "env": {
-        "OMP_NUM_THREADS": "4",
-        "SHMSIZE": "16000000000"
-      },
-      "semaphore": "tpctriggers.root",
-      "retry_count": 2
-    },
-    {
-      "name": "tpcclustermerge_2",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "tpcclusterpart0_2",
-        "tpcclusterpart1_2"
-      ],
-      "resources": {
-        "cpu": "1",
-        "relative_cpu": null,
-        "mem": "10000"
-      },
-      "timeframe": 2,
-      "labels": [
-        "RECO"
-      ],
-      "cwd": "tf2"
-    },
-    {
-      "name": "tpcreco_2",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "tpcclustermerge_2"
-      ],
-      "resources": {
-        "cpu": 3.0,
-        "relative_cpu": 0.375,
-        "mem": "16000"
-      },
-      "timeframe": 2,
-      "labels": [
-        "RECO"
-      ],
-      "cwd": "tf2"
-    },
-    {
-      "name": "itsreco_2",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "restdigi_2"
-      ],
-      "resources": {
-        "cpu": "1",
-        "relative_cpu": null,
-        "mem": "2000"
-      },
-      "timeframe": 2,
-      "labels": [
-        "RECO"
-      ],
-      "cwd": "tf2"
-    },
-    {
-      "name": "ft0reco_2",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "ft0fv0emcctp_digi_2"
-      ],
-      "resources": {
-        "cpu": 1,
-        "relative_cpu": null,
-        "mem": "1000"
-      },
-      "timeframe": 2,
-      "labels": [
-        "RECO"
-      ],
-      "cwd": "tf2"
-    },
-    {
-      "name": "itstpcMatch_2",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "tpcreco_2",
-        "itsreco_2",
-        "ft0reco_2"
-      ],
-      "resources": {
-        "cpu": 3.0,
-        "relative_cpu": 0.375,
-        "mem": "8000"
-      },
-      "timeframe": 2,
-      "labels": [
-        "RECO"
-      ],
-      "cwd": "tf2"
-    },
-    {
-      "name": "trdreco_2",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "trddigi_2",
-        "itstpcMatch_2",
-        "tpcreco_2",
-        "itsreco_2"
-      ],
-      "resources": {
-        "cpu": "1",
-        "relative_cpu": null,
-        "mem": "2000"
-      },
-      "timeframe": 2,
-      "labels": [
-        "RECO"
-      ],
-      "cwd": "tf2"
-    },
-    {
-      "name": "trdreco2_2",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "trdreco_2"
-      ],
-      "resources": {
-        "cpu": "1",
-        "relative_cpu": null,
-        "mem": "2000"
-      },
-      "timeframe": 2,
-      "labels": [
-        "RECO"
-      ],
-      "cwd": "tf2"
-    },
-    {
-      "name": "tofmatch_2",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "itstpcMatch_2",
-        "restdigi_2"
-      ],
-      "resources": {
-        "cpu": 1,
-        "relative_cpu": null,
-        "mem": "1500"
-      },
-      "timeframe": 2,
-      "labels": [
-        "RECO"
-      ],
-      "cwd": "tf2"
-    },
-    {
-      "name": "toftpcmatch_2",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "tofmatch_2",
-        "tpcreco_2",
-        "trdreco2_2"
-      ],
-      "resources": {
-        "cpu": 1,
-        "relative_cpu": null,
-        "mem": "1000"
-      },
-      "timeframe": 2,
-      "labels": [
-        "RECO"
-      ],
-      "cwd": "tf2"
-    },
-    {
-      "name": "mftreco_2",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "restdigi_2"
-      ],
-      "resources": {
-        "cpu": 1,
-        "relative_cpu": null,
-        "mem": "1500"
-      },
-      "timeframe": 2,
-      "labels": [
-        "RECO"
-      ],
-      "cwd": "tf2"
-    },
-    {
-      "name": "mchreco_2",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "restdigi_2"
-      ],
-      "resources": {
-        "cpu": 1,
-        "relative_cpu": null,
-        "mem": "1500"
-      },
-      "timeframe": 2,
-      "labels": [
-        "RECO"
-      ],
-      "cwd": "tf2"
-    },
-    {
-      "name": "midreco_2",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "restdigi_2"
-      ],
-      "resources": {
-        "cpu": 1,
-        "relative_cpu": null,
-        "mem": "1500"
-      },
-      "timeframe": 2,
-      "labels": [
-        "RECO"
-      ],
-      "cwd": "tf2"
-    },
-    {
-      "name": "fddreco_2",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "restdigi_2"
-      ],
-      "resources": {
-        "cpu": 1,
-        "relative_cpu": null,
-        "mem": "1500"
-      },
-      "timeframe": 2,
-      "labels": [
-        "RECO"
-      ],
-      "cwd": "tf2"
-    },
-    {
-      "name": "fv0reco_2",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "ft0fv0emcctp_digi_2"
-      ],
-      "resources": {
-        "cpu": 1,
-        "relative_cpu": null,
-        "mem": "1500"
-      },
-      "timeframe": 2,
-      "labels": [
-        "RECO"
-      ],
-      "cwd": "tf2"
-    },
-    {
-      "name": "emcalreco_2",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "ft0fv0emcctp_digi_2"
-      ],
-      "resources": {
-        "cpu": 1,
-        "relative_cpu": null,
-        "mem": "1500"
-      },
-      "timeframe": 2,
-      "labels": [
-        "RECO"
-      ],
-      "cwd": "tf2"
-    },
-    {
-      "name": "phsreco_2",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "restdigi_2"
-      ],
-      "resources": {
-        "cpu": 1,
-        "relative_cpu": null,
-        "mem": "1500"
-      },
-      "timeframe": 2,
-      "labels": [
-        "RECO"
-      ],
-      "cwd": "tf2"
-    },
-    {
-      "name": "cpvreco_2",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "restdigi_2"
-      ],
-      "resources": {
-        "cpu": 1,
-        "relative_cpu": null,
-        "mem": "1500"
-      },
-      "timeframe": 2,
-      "labels": [
-        "RECO"
-      ],
-      "cwd": "tf2"
-    },
-    {
-      "name": "mchmidMatch_2",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "mchreco_2",
-        "midreco_2"
-      ],
-      "resources": {
-        "cpu": 1,
-        "relative_cpu": null,
-        "mem": "1500"
-      },
-      "timeframe": 2,
-      "labels": [
-        "RECO"
-      ],
-      "cwd": "tf2"
-    },
-    {
-      "name": "mftmchMatch_2",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "mchmidMatch_2",
-        "mftreco_2"
-      ],
-      "resources": {
-        "cpu": 1,
-        "relative_cpu": null,
-        "mem": "1500"
-      },
-      "timeframe": 2,
-      "labels": [
-        "RECO"
-      ],
-      "cwd": "tf2"
-    },
-    {
-      "name": "hmpreco_2",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "restdigi_2"
-      ],
-      "resources": {
-        "cpu": 1,
-        "relative_cpu": null,
-        "mem": "1000"
-      },
-      "timeframe": 2,
-      "labels": [
-        "RECO"
-      ],
-      "cwd": "tf2"
-    },
-    {
-      "name": "hmpmatch_2",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "hmpreco_2",
-        "itstpcMatch_2",
-        "toftpcmatch_2"
-      ],
-      "resources": {
-        "cpu": 1,
-        "relative_cpu": null,
-        "mem": "1000"
-      },
-      "timeframe": 2,
-      "labels": [
-        "RECO"
-      ],
-      "cwd": "tf2"
-    },
-    {
-      "name": "pvfinder_2",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "itstpcMatch_2",
-        "midreco_2",
-        "mchmidMatch_2",
-        "ft0reco_2",
-        "fv0reco_2",
-        "ft0reco_2",
-        "emcalreco_2",
-        "phsreco_2",
-        "cpvreco_2",
-        "toftpcmatch_2",
-        "mftreco_2",
-        "mchreco_2",
-        "trdreco2_2",
-        "fddreco_2",
-        "mftmchMatch_2"
-      ],
-      "resources": {
-        "cpu": 8,
-        "relative_cpu": null,
-        "mem": "4000"
-      },
-      "timeframe": 2,
-      "labels": [
-        "RECO"
-      ],
-      "cwd": "tf2"
-    },
-    {
-      "name": "svfinder_2",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "pvfinder_2"
-      ],
-      "resources": {
-        "cpu": 1,
-        "relative_cpu": null,
-        "mem": "5000"
-      },
-      "timeframe": 2,
-      "labels": [
-        "RECO"
-      ],
-      "cwd": "tf2"
-    },
-    {
-      "name": "aod_2",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "pvfinder_2",
-        "svfinder_2",
-        "fv0reco_2",
-        "tofmatch_2",
-        "trdreco2_2",
-        "emcalreco_2",
-        "cpvreco_2",
-        "phsreco_2",
-        "midreco_2",
-        "mchmidMatch_2",
-        "hmpmatch_2"
-      ],
-      "resources": {
-        "cpu": "1",
-        "relative_cpu": null,
-        "mem": "4000"
-      },
-      "timeframe": 2,
-      "labels": [
-        "AOD"
-      ],
-      "cwd": "tf2"
-    },
-    {
-      "name": "aodmerge",
-      "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
-      "needs": [
-        "aod_1",
-        "aod_2"
-      ],
-      "resources": {
-        "cpu": "1",
-        "relative_cpu": null,
-        "mem": "2000"
-      },
-      "timeframe": -1,
-      "labels": [
-        "AOD"
-      ],
-      "cwd": "./"
+    "stages": [
+        {
+            "name": "__global_init_task__",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": [],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 500
+            },
+            "timeframe": -1,
+            "labels": [],
+            "cwd": "./",
+            "env": {
+                "ALICEO2_CCDB_CONDITION_NOT_AFTER": 3385078236000,
+                "ALICEO2_CCDB_LOCALCACHE": "/Users/desyrel/Documents/CERN/O2DPG/ccdb",
+                "IGNORE_VALIDITYCHECK_OF_CCDB_LOCALCACHE": "${ALICEO2_CCDB_LOCALCACHE:+\"ON\"}"
+            }
+        },
+        {
+            "name": "grpcreate",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": [],
+            "resources": {
+                "cpu": 0,
+                "relative_cpu": null,
+                "mem": 500
+            },
+            "timeframe": -1,
+            "labels": [],
+            "cwd": "./"
+        },
+        {
+            "name": "tpc_spacecharge_downloader",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": [],
+            "resources": {
+                "cpu": 0,
+                "relative_cpu": null,
+                "mem": 500
+            },
+            "timeframe": -1,
+            "labels": [],
+            "cwd": "./"
+        },
+        {
+            "name": "precollcontext_1",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["grpcreate"],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 500
+            },
+            "timeframe": 1,
+            "labels": [],
+            "cwd": "tf1"
+        },
+        {
+            "name": "gensgnconf_1",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": [],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 500
+            },
+            "timeframe": 1,
+            "labels": [],
+            "cwd": "tf1"
+        },
+        {
+            "name": "sgnsim_1",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["gensgnconf_1", "grpcreate"],
+            "resources": {
+                "cpu": 7.0,
+                "relative_cpu": 0.875,
+                "mem": 4000
+            },
+            "timeframe": 1,
+            "labels": ["GEANT"],
+            "cwd": "tf1"
+        },
+        {
+            "name": "linkGRP_1",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["sgnsim_1"],
+            "resources": {
+                "cpu": 0,
+                "relative_cpu": null,
+                "mem": 0
+            },
+            "timeframe": 1,
+            "labels": [],
+            "cwd": "tf1"
+        },
+        {
+            "name": "digicontext_1",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["linkGRP_1", "sgnsim_1"],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 500
+            },
+            "timeframe": 1,
+            "labels": ["DIGI"],
+            "cwd": "tf1"
+        },
+        {
+            "name": "tpcdigi_1",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": [
+                "digicontext_1",
+                "linkGRP_1",
+                "tpc_spacecharge_downloader"
+            ],
+            "resources": {
+                "cpu": 8,
+                "relative_cpu": null,
+                "mem": 9000
+            },
+            "timeframe": 1,
+            "labels": ["DIGI"],
+            "cwd": "tf1"
+        },
+        {
+            "name": "trddigi_1",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["digicontext_1"],
+            "resources": {
+                "cpu": 8,
+                "relative_cpu": null,
+                "mem": 8000
+            },
+            "timeframe": 1,
+            "labels": ["DIGI"],
+            "cwd": "tf1"
+        },
+        {
+            "name": "restdigi_1",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["digicontext_1"],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 500
+            },
+            "timeframe": 1,
+            "labels": ["DIGI", "SMALLDIGI"],
+            "cwd": "tf1"
+        },
+        {
+            "name": "ft0fv0emcctp_digi_1",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["digicontext_1"],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 500
+            },
+            "timeframe": 1,
+            "labels": ["DIGI", "SMALLDIGI"],
+            "cwd": "tf1"
+        },
+        {
+            "name": "tpcclusterpart0_1",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["tpcdigi_1"],
+            "resources": {
+                "cpu": 2,
+                "relative_cpu": null,
+                "mem": 8000
+            },
+            "timeframe": 1,
+            "labels": ["RECO"],
+            "cwd": "tf1",
+            "env": {
+                "OMP_NUM_THREADS": "4",
+                "SHMSIZE": "16000000000"
+            },
+            "semaphore": "tpctriggers.root",
+            "retry_count": 2
+        },
+        {
+            "name": "tpcclusterpart1_1",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["tpcdigi_1"],
+            "resources": {
+                "cpu": 2,
+                "relative_cpu": null,
+                "mem": 8000
+            },
+            "timeframe": 1,
+            "labels": ["RECO"],
+            "cwd": "tf1",
+            "env": {
+                "OMP_NUM_THREADS": "4",
+                "SHMSIZE": "16000000000"
+            },
+            "semaphore": "tpctriggers.root",
+            "retry_count": 2
+        },
+        {
+            "name": "tpcclustermerge_1",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["tpcclusterpart0_1", "tpcclusterpart1_1"],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 10000
+            },
+            "timeframe": 1,
+            "labels": ["RECO"],
+            "cwd": "tf1"
+        },
+        {
+            "name": "tpcreco_1",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["tpcclustermerge_1"],
+            "resources": {
+                "cpu": 3.0,
+                "relative_cpu": 0.375,
+                "mem": 16000
+            },
+            "timeframe": 1,
+            "labels": ["RECO"],
+            "cwd": "tf1"
+        },
+        {
+            "name": "itsreco_1",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["restdigi_1"],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 2000
+            },
+            "timeframe": 1,
+            "labels": ["RECO"],
+            "cwd": "tf1"
+        },
+        {
+            "name": "ft0reco_1",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["ft0fv0emcctp_digi_1"],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 1000
+            },
+            "timeframe": 1,
+            "labels": ["RECO"],
+            "cwd": "tf1"
+        },
+        {
+            "name": "itstpcMatch_1",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["tpcreco_1", "itsreco_1", "ft0reco_1"],
+            "resources": {
+                "cpu": 3.0,
+                "relative_cpu": 0.375,
+                "mem": 8000
+            },
+            "timeframe": 1,
+            "labels": ["RECO"],
+            "cwd": "tf1"
+        },
+        {
+            "name": "trdreco_1",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["trddigi_1", "itstpcMatch_1", "tpcreco_1", "itsreco_1"],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 2000
+            },
+            "timeframe": 1,
+            "labels": ["RECO"],
+            "cwd": "tf1"
+        },
+        {
+            "name": "trdreco2_1",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["trdreco_1"],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 2000
+            },
+            "timeframe": 1,
+            "labels": ["RECO"],
+            "cwd": "tf1"
+        },
+        {
+            "name": "tofmatch_1",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["itstpcMatch_1", "restdigi_1"],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 1500
+            },
+            "timeframe": 1,
+            "labels": ["RECO"],
+            "cwd": "tf1"
+        },
+        {
+            "name": "toftpcmatch_1",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["tofmatch_1", "tpcreco_1", "trdreco2_1"],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 1000
+            },
+            "timeframe": 1,
+            "labels": ["RECO"],
+            "cwd": "tf1"
+        },
+        {
+            "name": "mftreco_1",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["restdigi_1"],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 1500
+            },
+            "timeframe": 1,
+            "labels": ["RECO"],
+            "cwd": "tf1"
+        },
+        {
+            "name": "mchreco_1",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["restdigi_1"],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 1500
+            },
+            "timeframe": 1,
+            "labels": ["RECO"],
+            "cwd": "tf1"
+        },
+        {
+            "name": "midreco_1",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["restdigi_1"],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 1500
+            },
+            "timeframe": 1,
+            "labels": ["RECO"],
+            "cwd": "tf1"
+        },
+        {
+            "name": "fddreco_1",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["restdigi_1"],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 1500
+            },
+            "timeframe": 1,
+            "labels": ["RECO"],
+            "cwd": "tf1"
+        },
+        {
+            "name": "fv0reco_1",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["ft0fv0emcctp_digi_1"],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 1500
+            },
+            "timeframe": 1,
+            "labels": ["RECO"],
+            "cwd": "tf1"
+        },
+        {
+            "name": "emcalreco_1",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["ft0fv0emcctp_digi_1"],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 1500
+            },
+            "timeframe": 1,
+            "labels": ["RECO"],
+            "cwd": "tf1"
+        },
+        {
+            "name": "phsreco_1",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["restdigi_1"],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 1500
+            },
+            "timeframe": 1,
+            "labels": ["RECO"],
+            "cwd": "tf1"
+        },
+        {
+            "name": "cpvreco_1",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["restdigi_1"],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 1500
+            },
+            "timeframe": 1,
+            "labels": ["RECO"],
+            "cwd": "tf1"
+        },
+        {
+            "name": "mchmidMatch_1",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["mchreco_1", "midreco_1"],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 1500
+            },
+            "timeframe": 1,
+            "labels": ["RECO"],
+            "cwd": "tf1"
+        },
+        {
+            "name": "mftmchMatch_1",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["mchmidMatch_1", "mftreco_1"],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 1500
+            },
+            "timeframe": 1,
+            "labels": ["RECO"],
+            "cwd": "tf1"
+        },
+        {
+            "name": "hmpreco_1",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["restdigi_1"],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 1000
+            },
+            "timeframe": 1,
+            "labels": ["RECO"],
+            "cwd": "tf1"
+        },
+        {
+            "name": "hmpmatch_1",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["hmpreco_1", "itstpcMatch_1", "toftpcmatch_1"],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 1000
+            },
+            "timeframe": 1,
+            "labels": ["RECO"],
+            "cwd": "tf1"
+        },
+        {
+            "name": "pvfinder_1",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": [
+                "itstpcMatch_1",
+                "midreco_1",
+                "mchmidMatch_1",
+                "ft0reco_1",
+                "fv0reco_1",
+                "ft0reco_1",
+                "emcalreco_1",
+                "phsreco_1",
+                "cpvreco_1",
+                "toftpcmatch_1",
+                "mftreco_1",
+                "mchreco_1",
+                "trdreco2_1",
+                "fddreco_1",
+                "mftmchMatch_1"
+            ],
+            "resources": {
+                "cpu": 8,
+                "relative_cpu": null,
+                "mem": 4000
+            },
+            "timeframe": 1,
+            "labels": ["RECO"],
+            "cwd": "tf1"
+        },
+        {
+            "name": "svfinder_1",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["pvfinder_1"],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 5000
+            },
+            "timeframe": 1,
+            "labels": ["RECO"],
+            "cwd": "tf1"
+        },
+        {
+            "name": "aod_1",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": [
+                "pvfinder_1",
+                "svfinder_1",
+                "fv0reco_1",
+                "tofmatch_1",
+                "trdreco2_1",
+                "emcalreco_1",
+                "cpvreco_1",
+                "phsreco_1",
+                "midreco_1",
+                "mchmidMatch_1",
+                "hmpmatch_1"
+            ],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 4000
+            },
+            "timeframe": 1,
+            "labels": ["AOD"],
+            "cwd": "tf1"
+        },
+        {
+            "name": "precollcontext_2",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["grpcreate"],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 500
+            },
+            "timeframe": 2,
+            "labels": [],
+            "cwd": "tf2"
+        },
+        {
+            "name": "gensgnconf_2",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": [],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 500
+            },
+            "timeframe": 2,
+            "labels": [],
+            "cwd": "tf2"
+        },
+        {
+            "name": "sgnsim_2",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["gensgnconf_2", "grpcreate"],
+            "resources": {
+                "cpu": 7.0,
+                "relative_cpu": 0.875,
+                "mem": 4000
+            },
+            "timeframe": 2,
+            "labels": ["GEANT"],
+            "cwd": "tf2"
+        },
+        {
+            "name": "linkGRP_2",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["sgnsim_2"],
+            "resources": {
+                "cpu": 0,
+                "relative_cpu": null,
+                "mem": 0
+            },
+            "timeframe": 2,
+            "labels": [],
+            "cwd": "tf2"
+        },
+        {
+            "name": "digicontext_2",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["linkGRP_2", "sgnsim_2"],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 500
+            },
+            "timeframe": 2,
+            "labels": ["DIGI"],
+            "cwd": "tf2"
+        },
+        {
+            "name": "tpcdigi_2",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": [
+                "digicontext_2",
+                "linkGRP_2",
+                "tpc_spacecharge_downloader"
+            ],
+            "resources": {
+                "cpu": 8,
+                "relative_cpu": null,
+                "mem": 9000
+            },
+            "timeframe": 2,
+            "labels": ["DIGI"],
+            "cwd": "tf2"
+        },
+        {
+            "name": "trddigi_2",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["digicontext_2"],
+            "resources": {
+                "cpu": 8,
+                "relative_cpu": null,
+                "mem": 8000
+            },
+            "timeframe": 2,
+            "labels": ["DIGI"],
+            "cwd": "tf2"
+        },
+        {
+            "name": "restdigi_2",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["digicontext_2"],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 500
+            },
+            "timeframe": 2,
+            "labels": ["DIGI", "SMALLDIGI"],
+            "cwd": "tf2"
+        },
+        {
+            "name": "ft0fv0emcctp_digi_2",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["digicontext_2"],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 500
+            },
+            "timeframe": 2,
+            "labels": ["DIGI", "SMALLDIGI"],
+            "cwd": "tf2"
+        },
+        {
+            "name": "tpcclusterpart0_2",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["tpcdigi_2"],
+            "resources": {
+                "cpu": 2,
+                "relative_cpu": null,
+                "mem": 8000
+            },
+            "timeframe": 2,
+            "labels": ["RECO"],
+            "cwd": "tf2",
+            "env": {
+                "OMP_NUM_THREADS": "4",
+                "SHMSIZE": "16000000000"
+            },
+            "semaphore": "tpctriggers.root",
+            "retry_count": 2
+        },
+        {
+            "name": "tpcclusterpart1_2",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["tpcdigi_2"],
+            "resources": {
+                "cpu": 2,
+                "relative_cpu": null,
+                "mem": 8000
+            },
+            "timeframe": 2,
+            "labels": ["RECO"],
+            "cwd": "tf2",
+            "env": {
+                "OMP_NUM_THREADS": "4",
+                "SHMSIZE": "16000000000"
+            },
+            "semaphore": "tpctriggers.root",
+            "retry_count": 2
+        },
+        {
+            "name": "tpcclustermerge_2",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["tpcclusterpart0_2", "tpcclusterpart1_2"],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 10000
+            },
+            "timeframe": 2,
+            "labels": ["RECO"],
+            "cwd": "tf2"
+        },
+        {
+            "name": "tpcreco_2",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["tpcclustermerge_2"],
+            "resources": {
+                "cpu": 3.0,
+                "relative_cpu": 0.375,
+                "mem": 16000
+            },
+            "timeframe": 2,
+            "labels": ["RECO"],
+            "cwd": "tf2"
+        },
+        {
+            "name": "itsreco_2",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["restdigi_2"],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 2000
+            },
+            "timeframe": 2,
+            "labels": ["RECO"],
+            "cwd": "tf2"
+        },
+        {
+            "name": "ft0reco_2",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["ft0fv0emcctp_digi_2"],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 1000
+            },
+            "timeframe": 2,
+            "labels": ["RECO"],
+            "cwd": "tf2"
+        },
+        {
+            "name": "itstpcMatch_2",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["tpcreco_2", "itsreco_2", "ft0reco_2"],
+            "resources": {
+                "cpu": 3.0,
+                "relative_cpu": 0.375,
+                "mem": 8000
+            },
+            "timeframe": 2,
+            "labels": ["RECO"],
+            "cwd": "tf2"
+        },
+        {
+            "name": "trdreco_2",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["trddigi_2", "itstpcMatch_2", "tpcreco_2", "itsreco_2"],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 2000
+            },
+            "timeframe": 2,
+            "labels": ["RECO"],
+            "cwd": "tf2"
+        },
+        {
+            "name": "trdreco2_2",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["trdreco_2"],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 2000
+            },
+            "timeframe": 2,
+            "labels": ["RECO"],
+            "cwd": "tf2"
+        },
+        {
+            "name": "tofmatch_2",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["itstpcMatch_2", "restdigi_2"],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 1500
+            },
+            "timeframe": 2,
+            "labels": ["RECO"],
+            "cwd": "tf2"
+        },
+        {
+            "name": "toftpcmatch_2",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["tofmatch_2", "tpcreco_2", "trdreco2_2"],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 1000
+            },
+            "timeframe": 2,
+            "labels": ["RECO"],
+            "cwd": "tf2"
+        },
+        {
+            "name": "mftreco_2",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["restdigi_2"],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 1500
+            },
+            "timeframe": 2,
+            "labels": ["RECO"],
+            "cwd": "tf2"
+        },
+        {
+            "name": "mchreco_2",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["restdigi_2"],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 1500
+            },
+            "timeframe": 2,
+            "labels": ["RECO"],
+            "cwd": "tf2"
+        },
+        {
+            "name": "midreco_2",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["restdigi_2"],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 1500
+            },
+            "timeframe": 2,
+            "labels": ["RECO"],
+            "cwd": "tf2"
+        },
+        {
+            "name": "fddreco_2",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["restdigi_2"],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 1500
+            },
+            "timeframe": 2,
+            "labels": ["RECO"],
+            "cwd": "tf2"
+        },
+        {
+            "name": "fv0reco_2",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["ft0fv0emcctp_digi_2"],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 1500
+            },
+            "timeframe": 2,
+            "labels": ["RECO"],
+            "cwd": "tf2"
+        },
+        {
+            "name": "emcalreco_2",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["ft0fv0emcctp_digi_2"],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 1500
+            },
+            "timeframe": 2,
+            "labels": ["RECO"],
+            "cwd": "tf2"
+        },
+        {
+            "name": "phsreco_2",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["restdigi_2"],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 1500
+            },
+            "timeframe": 2,
+            "labels": ["RECO"],
+            "cwd": "tf2"
+        },
+        {
+            "name": "cpvreco_2",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["restdigi_2"],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 1500
+            },
+            "timeframe": 2,
+            "labels": ["RECO"],
+            "cwd": "tf2"
+        },
+        {
+            "name": "mchmidMatch_2",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["mchreco_2", "midreco_2"],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 1500
+            },
+            "timeframe": 2,
+            "labels": ["RECO"],
+            "cwd": "tf2"
+        },
+        {
+            "name": "mftmchMatch_2",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["mchmidMatch_2", "mftreco_2"],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 1500
+            },
+            "timeframe": 2,
+            "labels": ["RECO"],
+            "cwd": "tf2"
+        },
+        {
+            "name": "hmpreco_2",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["restdigi_2"],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 1000
+            },
+            "timeframe": 2,
+            "labels": ["RECO"],
+            "cwd": "tf2"
+        },
+        {
+            "name": "hmpmatch_2",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["hmpreco_2", "itstpcMatch_2", "toftpcmatch_2"],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 1000
+            },
+            "timeframe": 2,
+            "labels": ["RECO"],
+            "cwd": "tf2"
+        },
+        {
+            "name": "pvfinder_2",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": [
+                "itstpcMatch_2",
+                "midreco_2",
+                "mchmidMatch_2",
+                "ft0reco_2",
+                "fv0reco_2",
+                "ft0reco_2",
+                "emcalreco_2",
+                "phsreco_2",
+                "cpvreco_2",
+                "toftpcmatch_2",
+                "mftreco_2",
+                "mchreco_2",
+                "trdreco2_2",
+                "fddreco_2",
+                "mftmchMatch_2"
+            ],
+            "resources": {
+                "cpu": 8,
+                "relative_cpu": null,
+                "mem": 4000
+            },
+            "timeframe": 2,
+            "labels": ["RECO"],
+            "cwd": "tf2"
+        },
+        {
+            "name": "svfinder_2",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["pvfinder_2"],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 5000
+            },
+            "timeframe": 2,
+            "labels": ["RECO"],
+            "cwd": "tf2"
+        },
+        {
+            "name": "aod_2",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": [
+                "pvfinder_2",
+                "svfinder_2",
+                "fv0reco_2",
+                "tofmatch_2",
+                "trdreco2_2",
+                "emcalreco_2",
+                "cpvreco_2",
+                "phsreco_2",
+                "midreco_2",
+                "mchmidMatch_2",
+                "hmpmatch_2"
+            ],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 4000
+            },
+            "timeframe": 2,
+            "labels": ["AOD"],
+            "cwd": "tf2"
+        },
+        {
+            "name": "aodmerge",
+            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "needs": ["aod_1", "aod_2"],
+            "resources": {
+                "cpu": 1,
+                "relative_cpu": null,
+                "mem": 2000
+            },
+            "timeframe": -1,
+            "labels": ["AOD"],
+            "cwd": "./"
+        }
+    ],
+    "meta": {
+        "run": 310000,
+        "productionTag": "unknown",
+        "timestamp": 1550600800000,
+        "conditionDB": "http://alice-ccdb.cern.ch",
+        "condition_not_after": 3385078236000,
+        "orbitsPerTF": 128,
+        "anchor_config": "",
+        "dump_config": "user_config.json",
+        "ns": "25",
+        "gen": "pythia8",
+        "proc": "cdiff",
+        "trigger": "",
+        "ini": "",
+        "confKey": ";GeneratorPythia8.config=pythia8.cfg;GeneratorPythia8.config=pythia8.cfg",
+        "interactionRate": "50000",
+        "bcPatternFile": "",
+        "meanVertexPerRunTxtFile": "",
+        "eCM": "5020",
+        "eA": -1,
+        "eB": -1,
+        "col": "pp",
+        "field": "ccdb",
+        "with_qed": false,
+        "ptHatMin": 0,
+        "ptHatMax": -1,
+        "weightPow": -1,
+        "embedding": false,
+        "embeddPattern": "@0:e1",
+        "nb": 20,
+        "genBkg": "",
+        "procBkg": "heavy_ion",
+        "iniBkg": "${O2DPG_ROOT}/MC/config/common/ini/basic.ini",
+        "confKeyBkg": "",
+        "colBkg": "PbPb",
+        "e": "TGeant4",
+        "tf": "2",
+        "production_offset": 0,
+        "j": 8,
+        "mod": "--skipModules ZDC",
+        "with_ZDC": false,
+        "seed": null,
+        "o": "workflow.json",
+        "noIPC": null,
+        "upload_bkg_to": null,
+        "use_bkg_from": null,
+        "early_tf_cleanup": false,
+        "pregenCollContext": false,
+        "no_combine_smaller_digi": false,
+        "no_combine_dpl_devices": false,
+        "no_mc_labels": false,
+        "no_tpc_digitchunking": false,
+        "with_strangeness_tracking": false,
+        "combine_tpc_clusterization": false,
+        "first_orbit": 0,
+        "sor": 1550600800000,
+        "run_anchored": false,
+        "alternative_reco_software": "",
+        "dpl_child_driver": "",
+        "include_qc": false,
+        "include_local_qc": false,
+        "include_analysis": false,
+        "mft_reco_full": false,
+        "mft_assessment_full": false,
+        "fwdmatching_assessment_full": false,
+        "fwdmatching_4_param": false,
+        "fwdmatching_cut_4_param": false,
+        "fwdmatching_save_trainingdata": false
     }
-  ],
-  "meta": {
-    "run": 310000,
-    "productionTag": "unknown",
-    "timestamp": 1550600800000,
-    "conditionDB": "http://alice-ccdb.cern.ch",
-    "condition_not_after": 3385078236000,
-    "orbitsPerTF": 128,
-    "anchor_config": "",
-    "dump_config": "user_config.json",
-    "ns": "25",
-    "gen": "pythia8",
-    "proc": "cdiff",
-    "trigger": "",
-    "ini": "",
-    "confKey": ";GeneratorPythia8.config=pythia8.cfg;GeneratorPythia8.config=pythia8.cfg",
-    "interactionRate": "50000",
-    "bcPatternFile": "",
-    "meanVertexPerRunTxtFile": "",
-    "eCM": "5020",
-    "eA": -1,
-    "eB": -1,
-    "col": "pp",
-    "field": "ccdb",
-    "with_qed": false,
-    "ptHatMin": 0,
-    "ptHatMax": -1,
-    "weightPow": -1,
-    "embedding": false,
-    "embeddPattern": "@0:e1",
-    "nb": 20,
-    "genBkg": "",
-    "procBkg": "heavy_ion",
-    "iniBkg": "${O2DPG_ROOT}/MC/config/common/ini/basic.ini",
-    "confKeyBkg": "",
-    "colBkg": "PbPb",
-    "e": "TGeant4",
-    "tf": "2",
-    "production_offset": 0,
-    "j": 8,
-    "mod": "--skipModules ZDC",
-    "with_ZDC": false,
-    "seed": null,
-    "o": "workflow.json",
-    "noIPC": null,
-    "upload_bkg_to": null,
-    "use_bkg_from": null,
-    "early_tf_cleanup": false,
-    "pregenCollContext": false,
-    "no_combine_smaller_digi": false,
-    "no_combine_dpl_devices": false,
-    "no_mc_labels": false,
-    "no_tpc_digitchunking": false,
-    "with_strangeness_tracking": false,
-    "combine_tpc_clusterization": false,
-    "first_orbit": 0,
-    "sor": 1550600800000,
-    "run_anchored": false,
-    "alternative_reco_software": "",
-    "dpl_child_driver": "",
-    "include_qc": false,
-    "include_local_qc": false,
-    "include_analysis": false,
-    "mft_reco_full": false,
-    "mft_assessment_full": false,
-    "fwdmatching_assessment_full": false,
-    "fwdmatching_4_param": false,
-    "fwdmatching_cut_4_param": false,
-    "fwdmatching_save_trainingdata": false
-  }
 }
