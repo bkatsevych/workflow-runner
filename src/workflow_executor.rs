@@ -10,6 +10,7 @@ use std::collections::{HashMap, HashSet};
 use std::env;
 // use std::iter::FromIterator;
 use std::process;
+use std::process::Command;
 
 #[derive(Debug)]
 struct DagProperties {
@@ -18,7 +19,7 @@ struct DagProperties {
     topological_ordering: Vec<Vec<isize>>,
 }
 
-pub struct WorkflowExecutor {
+pub struct WorkflowExecutor<'a> {
     arguments: Arguments,
     is_production_mode: bool,
     workflow_file: String,
@@ -33,9 +34,22 @@ pub struct WorkflowExecutor {
     id_to_task: Vec<String>,
     task_to_id: HashMap<String, usize>,
     resource_manager: ResourceManager,
+    procstatus: HashMap<usize, &'a str>,
+    taskneeds: HashMap<String, HashSet<String>>,
+    stop_on_failure: bool,
+    scheduling_iteration: u32,
+    process_list: Vec<String>,
+    backfill_process_list: Vec<String>,
+    pid_to_psutilsproc: HashMap<u32, String>,
+    pid_to_files: HashMap<u32, String>,
+    pid_to_connections: HashMap<u32, String>,
+    internal_monitor_counter: i32,
+    internal_monitor_id: i32,
+    tids_marked_to_retry: Vec<i32>,
+    retry_counter: Vec<i32>,
 }
 
-impl WorkflowExecutor {
+impl<'a> WorkflowExecutor<'a> {
     pub fn new(arguments: Arguments, action_logger: Logger, metric_logger: Logger) -> Self {
         let is_production_mode = arguments.production_mode.clone();
         let workflow_file: String = arguments.workflow_file.clone();
@@ -83,7 +97,7 @@ impl WorkflowExecutor {
             .iter()
             .map(|l| l["name"].as_str().unwrap().to_string())
             .collect();
-
+        print!("Task universe: {:?}", taskuniverse);
         // construct task ID <-> task name lookup
         let mut id_to_task: Vec<String> = vec!["".to_string(); taskuniverse.len()];
         let mut task_to_id: HashMap<String, usize> = HashMap::new();
@@ -94,7 +108,11 @@ impl WorkflowExecutor {
         }
 
         if arguments.update_resources.is_some() {
-            update_resource_estimates(&mut workflow_spec, &arguments.update_resources);
+            update_resource_estimates(
+                &mut workflow_spec,
+                &arguments.update_resources,
+                &action_logger,
+            );
         }
 
         // construct the object that is in charge of resource management...
@@ -119,6 +137,53 @@ impl WorkflowExecutor {
             }
         }
 
+        let mut procstatus: HashMap<usize, &str> = HashMap::new();
+
+        if let Some(stages) = workflow_spec["stages"].as_array() {
+            for (tid, _) in stages.iter().enumerate() {
+                procstatus.insert(tid, "ToDo");
+            }
+        }
+
+        let mut taskneeds = HashMap::new();
+        for t in &taskuniverse {
+            let requirements = get_requirements(t, &workflow_spec, &task_to_id);
+            let requirements_set: HashSet<_> = requirements.into_iter().collect();
+            taskneeds.insert(t.clone(), requirements_set);
+        }
+
+        let stop_on_failure = !arguments.keep_going.clone();
+
+        print!("Stop on failure: {}", stop_on_failure);
+
+        let mut scheduling_iteration: u32 = 0; // count how often it was tried to schedule new tasks
+        let mut process_list: Vec<String> = Vec::new(); // list of currently scheduled tasks with normal priority
+        let mut backfill_process_list: Vec<String> = Vec::new(); // list of currently scheduled tasks with low backfill priority (not sure this is needed)
+        let mut pid_to_psutilsproc: HashMap<u32, String> = HashMap::new(); // cache of putilsproc for resource monitoring
+        let mut pid_to_files: HashMap<u32, String> = HashMap::new(); // we can auto-detect what files are produced by which task (at least to some extent)
+        let mut pid_to_connections: HashMap<u32, String> = HashMap::new(); // we can auto-detect what connections are opened by which task (at least to some extent)
+
+        // TODO:
+        // Signal handling
+
+        let mut internal_monitor_counter: i32 = 0; // internal use
+        let mut internal_monitor_id: i32 = 0; // internal use
+        let mut tids_marked_to_retry: Vec<i32> = Vec::new(); // sometimes we might want to retry a failed task (simply because it was "unlucky") and we put them here
+        let mut retry_counter: Vec<i32> = vec![0; taskuniverse.len()];
+        let task_retries: Vec<i64> = taskuniverse
+            .iter()
+            .enumerate()
+            .map(|(tid, _)| {
+                workflow_spec["stages"][tid]
+                    .get("retry_count")
+                    .and_then(serde_json::Value::as_i64)
+                    .unwrap_or(0)
+            })
+            .collect();
+
+        let mut alternative_envs: HashMap<String, HashMap<String, String>> = HashMap::new();
+        init_alternative_software_environments(&workflow_spec, &mut alternative_envs);
+
         WorkflowExecutor {
             arguments,
             is_production_mode,
@@ -134,6 +199,19 @@ impl WorkflowExecutor {
             id_to_task,
             task_to_id,
             resource_manager,
+            procstatus,
+            taskneeds,
+            stop_on_failure,
+            scheduling_iteration,
+            process_list,
+            backfill_process_list,
+            pid_to_psutilsproc,
+            pid_to_files,
+            pid_to_connections,
+            internal_monitor_counter,
+            internal_monitor_id,
+            tids_marked_to_retry,
+            retry_counter,
         }
     }
 }
@@ -488,7 +566,11 @@ fn build_dag_properties(workflow_spec: &Value, action_logger: &Logger) -> DagPro
     }
 }
 
-fn update_resource_estimates(workflow: &mut Value, resource_json: &Option<String>) {
+fn update_resource_estimates(
+    workflow: &mut Value,
+    resource_json: &Option<String>,
+    action_logger: &Logger,
+) {
     if let Some(resource_json) = resource_json {
         let resource_dict: HashMap<String, Value> = serde_json::from_str(resource_json).unwrap();
         let stages = workflow["stages"].as_array_mut().unwrap();
@@ -506,10 +588,10 @@ fn update_resource_estimates(workflow: &mut Value, resource_json: &Option<String
                 // memory
                 if let Some(newmem) = new_resources.get("mem") {
                     let oldmem = task["resources"]["mem"].as_f64().unwrap();
-                    println!(
+                    action_logger.info(&format!(
                         "Updating mem estimate for {} from {} to {}",
                         name, oldmem, newmem
-                    );
+                    ));
                     task["resources"]["mem"] = newmem.clone();
                 }
 
@@ -520,10 +602,10 @@ fn update_resource_estimates(workflow: &mut Value, resource_json: &Option<String
                     if let Some(rel_cpu) = task["resources"]["relative_cpu"].as_f64() {
                         newcpu *= rel_cpu;
                     }
-                    println!(
+                    action_logger.info(&format!(
                         "Updating cpu estimate for {} from {} to {}",
                         name, oldcpu, newcpu
-                    );
+                    ));
                     task["resources"]["cpu"] = Value::from(newcpu);
                 }
             }
@@ -536,5 +618,81 @@ fn get_global_task_name(name: &str) -> String {
     match tokens.last().unwrap().parse::<i32>() {
         Ok(_) => tokens[..tokens.len() - 1].join("_"),
         Err(_) => name.to_string(),
+    }
+}
+
+fn get_requirements(
+    task_name: &str,
+    workflowspec: &Value,
+    tasktoid: &HashMap<String, usize>,
+) -> Vec<String> {
+    let mut l = Vec::new();
+    let task_id = tasktoid.get(task_name).unwrap();
+    let required_tasks = workflowspec["stages"][*task_id]["needs"]
+        .as_array()
+        .unwrap();
+
+    for required_task in required_tasks {
+        let required_task_name = required_task.as_str().unwrap().to_string();
+        l.push(required_task_name.clone());
+        l.extend(get_requirements(
+            &required_task_name,
+            workflowspec,
+            tasktoid,
+        ));
+    }
+
+    l
+}
+
+fn get_alienv_software_environment(
+    packagestring: &str,
+) -> Result<HashMap<String, String>, Box<dyn std::error::Error>> {
+    let cmd = format!("/cvmfs/alice.cern.ch/bin/alienv printenv {}", packagestring);
+    let output = Command::new("sh").arg("-c").arg(&cmd).output()?;
+
+    if !output.stderr.is_empty() {
+        println!("{}", String::from_utf8_lossy(&output.stderr));
+        return Err("Command execution failed".into());
+    }
+
+    let envstring = String::from_utf8(output.stdout)?;
+    let tokens: Vec<&str> = envstring.split(";").collect();
+    let mut envmap = HashMap::new();
+
+    for t in tokens {
+        if t.contains("=") {
+            let assignment: Vec<&str> = t.trim().split("=").collect();
+            envmap.insert(assignment[0].to_string(), assignment[1].to_string());
+        } else if t.contains("export") {
+            let variable = t.split_whitespace().nth(1).unwrap();
+            if !envmap.contains_key(variable) {
+                envmap.insert(variable.to_string(), "".to_string());
+            }
+        }
+    }
+
+    Ok(envmap)
+}
+
+fn init_alternative_software_environments(
+    workflowspec: &Value,
+    alternative_envs: &mut HashMap<String, HashMap<String, String>>,
+) {
+    let mut environment_cache = HashMap::new();
+
+    if let Value::Object(stages) = &workflowspec["stages"] {
+        for (taskid, stage) in stages {
+            let packagestr = stage
+                .get("alternative_alienv_package")
+                .and_then(Value::as_str);
+            if let Some(packagestr) = packagestr {
+                if !environment_cache.contains_key(packagestr) {
+                    let env = get_alienv_software_environment(packagestr).unwrap();
+                    environment_cache.insert(packagestr.to_string(), env);
+                }
+                alternative_envs.insert(taskid.to_string(), environment_cache[packagestr].clone());
+            }
+        }
     }
 }
