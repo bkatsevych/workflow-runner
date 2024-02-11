@@ -17,3 +17,8 @@ General help
 ```
 $ cargo run -- --help
 ```
+
+# To do
+
+-   Graph visualization
+-   Signal handling
