@@ -1,12 +1,9 @@
+use crate::utils::kill_child_procs;
 use arguments::Arguments;
 use clap::Parser;
 use logger::{LogLevel, Logger};
-use signal_hook::consts::signal::*;
-use signal_hook::iterator::Signals;
-use std::io::Error;
 use std::process;
 use std::process::{exit, Command};
-use utils::kill_child_procs;
 use workflow_executor::WorkflowExecutor;
 mod arguments;
 mod graph;
@@ -15,7 +12,14 @@ mod resource_manager;
 mod utils;
 mod workflow_executor;
 
-fn main() -> Result<(), Error> {
+fn main() {
+    // setting Ctrl-C handler
+    ctrlc::set_handler(move || {
+        println!("Ctrl-C received, exiting");
+        kill_child_procs();
+    })
+    .expect("Error setting Ctrl-C handler");
+
     // defining command line options
     let arguments = Arguments::parse();
 
@@ -50,25 +54,8 @@ fn main() -> Result<(), Error> {
         action_logger.info("Running in cgroup");
     }
 
-    // handling SIGINT
-    let mut signals = Signals::new(&[SIGINT])?;
-
-    'outer: loop {
-        for sig in signals.pending() {
-            match sig {
-                SIGINT => {
-                    print!("\nReceived SIGINT, terminating...\n");
-                    kill_child_procs();
-                    break 'outer;
-                }
-                _ => unreachable!(),
-            }
-        }
-    }
-
     // instantiating workflow executor
     let mut workflow_executor = WorkflowExecutor::new(arguments, action_logger, metric_logger);
-    // workflow_executor.execute();
 
-    Ok(())
+    // workflow_executor.execute();
 }

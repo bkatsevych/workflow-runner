@@ -17,6 +17,7 @@ pub fn kill_child_procs() {
     system.refresh_all();
 
     let current_pid = process::id();
+    println!("Signal {} caught", current_pid);
     let processes = system.processes();
 
     for (&pid, proc) in processes {
