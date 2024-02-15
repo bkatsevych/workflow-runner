@@ -1,10 +1,13 @@
 use arguments::Arguments;
 use clap::Parser;
 use logger::{LogLevel, Logger};
+use signal_hook::consts::signal::*;
+use signal_hook::iterator::Signals;
+use std::io::Error;
 use std::process;
 use std::process::{exit, Command};
+use utils::kill_child_procs;
 use workflow_executor::WorkflowExecutor;
-
 mod arguments;
 mod graph;
 mod logger;
@@ -12,7 +15,7 @@ mod resource_manager;
 mod utils;
 mod workflow_executor;
 
-fn main() {
+fn main() -> Result<(), Error> {
     // defining command line options
     let arguments = Arguments::parse();
 
@@ -47,5 +50,25 @@ fn main() {
         action_logger.info("Running in cgroup");
     }
 
-    let workflow_executor = WorkflowExecutor::new(arguments, action_logger, metric_logger);
+    // handling SIGINT
+    let mut signals = Signals::new(&[SIGINT])?;
+
+    'outer: loop {
+        for sig in signals.pending() {
+            match sig {
+                SIGINT => {
+                    print!("\nReceived SIGINT, terminating...\n");
+                    kill_child_procs();
+                    break 'outer;
+                }
+                _ => unreachable!(),
+            }
+        }
+    }
+
+    // instantiating workflow executor
+    let mut workflow_executor = WorkflowExecutor::new(arguments, action_logger, metric_logger);
+    // workflow_executor.execute();
+
+    Ok(())
 }

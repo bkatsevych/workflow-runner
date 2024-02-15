@@ -8,9 +8,9 @@ use serde_json::Map;
 pub use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::env;
-// use std::iter::FromIterator;
 use std::process;
 use std::process::Command;
+use std::time::Instant;
 
 #[derive(Debug)]
 struct DagProperties {
@@ -47,6 +47,9 @@ pub struct WorkflowExecutor<'a> {
     internal_monitor_id: i32,
     tids_marked_to_retry: Vec<i32>,
     retry_counter: Vec<i32>,
+    task_retries: Vec<i64>,
+    alternative_envs: HashMap<String, HashMap<String, String>>,
+    start_time: Option<Instant>,
 }
 
 impl<'a> WorkflowExecutor<'a> {
@@ -97,7 +100,7 @@ impl<'a> WorkflowExecutor<'a> {
             .iter()
             .map(|l| l["name"].as_str().unwrap().to_string())
             .collect();
-        print!("Task universe: {:?}", taskuniverse);
+
         // construct task ID <-> task name lookup
         let mut id_to_task: Vec<String> = vec!["".to_string(); taskuniverse.len()];
         let mut task_to_id: HashMap<String, usize> = HashMap::new();
@@ -162,10 +165,6 @@ impl<'a> WorkflowExecutor<'a> {
         let mut pid_to_psutilsproc: HashMap<u32, String> = HashMap::new(); // cache of putilsproc for resource monitoring
         let mut pid_to_files: HashMap<u32, String> = HashMap::new(); // we can auto-detect what files are produced by which task (at least to some extent)
         let mut pid_to_connections: HashMap<u32, String> = HashMap::new(); // we can auto-detect what connections are opened by which task (at least to some extent)
-
-        // TODO:
-        // Signal handling
-
         let mut internal_monitor_counter: i32 = 0; // internal use
         let mut internal_monitor_id: i32 = 0; // internal use
         let mut tids_marked_to_retry: Vec<i32> = Vec::new(); // sometimes we might want to retry a failed task (simply because it was "unlucky") and we put them here
@@ -212,6 +211,9 @@ impl<'a> WorkflowExecutor<'a> {
             internal_monitor_id,
             tids_marked_to_retry,
             retry_counter,
+            task_retries,
+            alternative_envs,
+            start_time: None,
         }
     }
 }

@@ -12,3 +12,5 @@ serde_json = "1.0"
 chrono = "0.4.33"
 regex = "1.10.3"
 rustix = {version = "0.38.31", features = ["process"]}
+signal-hook = "0.3.17"
+

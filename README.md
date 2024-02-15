@@ -21,4 +21,4 @@ $ cargo run -- --help
 # To do
 
 -   Graph visualization
--   Signal handling
+-   Speed up ROOT init
