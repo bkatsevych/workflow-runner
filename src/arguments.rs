@@ -1,7 +1,7 @@
 use clap::Parser;
 use sysinfo::System;
 
-#[derive(Debug, Parser)]
+#[derive(Debug, Parser, Clone)]
 #[command(author, version, about, long_about = None)]
 pub struct Arguments {
     /// Input workflow file name

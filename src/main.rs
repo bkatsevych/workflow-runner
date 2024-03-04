@@ -13,7 +13,6 @@ mod utils;
 mod workflow_executor;
 
 fn main() {
-    // setting Ctrl-C handler
     ctrlc::set_handler(move || {
         println!("Ctrl-C received, exiting");
         kill_child_procs();
@@ -40,7 +39,9 @@ fn main() {
         // cgroups such as /sys/fs/cgroup/cpuset/<cgroup-name>/tasks
         // or              /sys/fs/cgroup/cpu/<cgroup-name>/tasks
         let command = format!("echo {} > {}", my_pid, cgroup);
+
         action_logger.info(&format!("Try running in cgroup {}", cgroup));
+
         let output = Command::new("sh")
             .arg("-c")
             .arg(&command)
@@ -51,11 +52,12 @@ fn main() {
             action_logger.error("Could not apply cgroup");
             exit(output.status.code().unwrap_or(1));
         }
+
         action_logger.info("Running in cgroup");
     }
 
     // instantiating workflow executor
     let mut workflow_executor = WorkflowExecutor::new(arguments, action_logger, metric_logger);
 
-    // workflow_executor.execute();
+    process::exit(workflow_executor.execute() as i32);
 }
