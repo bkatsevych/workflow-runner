@@ -20,7 +20,7 @@
         },
         {
             "name": "grpcreate",
-            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "cmd": "echo running grpcreate ; sleep $((RANDOM % 2 + 1)); echo finish grpcreate",
             "needs": [],
             "resources": {
                 "cpu": 0,
