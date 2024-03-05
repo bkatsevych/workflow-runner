@@ -3,6 +3,7 @@ use crate::graph::Graph;
 use crate::logger::Logger;
 use crate::resource_manager::ResourceManager;
 use crate::utils::load_json;
+// use alloc::task;
 use libc::{setpriority, PRIO_PROCESS};
 use regex::Regex;
 use serde_json::Map;
@@ -347,6 +348,7 @@ impl<'a> WorkflowExecutor<'a> {
             }
         }
 
+        // this is actually spawning the new process
         let p = Command::new("/bin/bash")
             .arg("-c")
             .arg(c)
@@ -392,9 +394,9 @@ Use the `--produce-script myscript.sh` option for this.";
         // Refresh CPUs again.
         s.refresh_cpu();
 
-        for cpu in s.cpus() {
-            println!("CPU: {}%", cpu.cpu_usage());
-        }
+       // for cpu in s.cpus() {
+       //     println!("CPU: {}%", cpu.cpu_usage());
+       // }
 
         env::set_var("JOBUTILS_SKIPDONE", "ON");
 
@@ -483,31 +485,39 @@ Use the `--produce-script myscript.sh` option for this.";
         };
         let mut finished_tasks: Vec<usize> = Vec::new(); // Vector of finished tasks
 
+        println!("candidates: {:?}", candidates);
+
+       // sort candidate list according to task weights
+       let mut candidates: Vec<(isize, (i32, i32))> = candidates
+        .iter()
+        .map(|&tid| (tid, self.taskweights[tid as usize]))
+        .collect();
+
+       candidates.sort_by(|a, b| {
+         let a_key = (a.1 .0, -(a.1 .1));
+         let b_key = (b.1 .0, -(b.1 .1));
+         a_key.cmp(&b_key)
+       });
+
+        let mut candidates_without_weights: Vec<isize> = candidates.into_iter().map(|(tid, _)| tid).collect();
+
+
         loop {
-            // sort candidate list according to task weights
-            let mut candidates: Vec<(isize, (i32, i32))> = candidates
-                .iter()
-                .map(|&tid| (tid, self.taskweights[tid as usize]))
-                .collect();
-
-            candidates.sort_by(|a, b| {
-                let a_key = (a.1 .0, -(a.1 .1));
-                let b_key = (b.1 .0, -(b.1 .1));
-                a_key.cmp(&b_key)
-            });
-
-            let mut candidates_without_weights: Vec<isize> =
-                candidates.into_iter().map(|(tid, _)| tid).collect();
+                        
             let mut finished: Vec<isize> = Vec::new();
-            let sorted_candidates: Vec<_> = candidates_without_weights
-                .iter()
-                .map(|&c| (c, self.id_to_task[c as usize].clone()))
-                .collect();
+            
+            //let sorted_candidates: Vec<_> = candidates_without_weights
+            //    .iter()
+            //    .map(|&c| (c, self.id_to_task[c as usize].clone()))
+            //    .collect();
 
-            self.action_logger.debug(&format!(
-                "Sorted current candidates: {:?}",
-                sorted_candidates
-            ));
+            //self.action_logger.debug(&format!(
+            //    "Sorted current candidates: {:?}",
+             //   sorted_candidates
+            //));
+            
+            println!("Sorted current candidates: {:?}", candidates_without_weights);
+
             self.try_jobs_from_candidates(&mut candidates_without_weights, &mut finished);
 
             if !candidates_without_weights.is_empty() && self.process_list.is_empty() {
@@ -582,11 +592,7 @@ Use the `--produce-script myscript.sh` option for this.";
             self.action_logger
                 .debug(&format!("New candidates {:?}", candidates_without_weights));
 
-            send_webhook(
-                &self.arguments.webhook,
-                &format!("New candidates {:?}", candidates_without_weights),
-            );
-
+            
             if candidates_without_weights.is_empty() && self.process_list.is_empty() {
                 break;
             }
@@ -685,6 +691,7 @@ Use the `--produce-script myscript.sh` option for this.";
         let mut failure_detected = false;
         let mut failing_pids: Vec<u32> = Vec::new();
 
+        println!("Waiting for process. Current process list has length {} ", self.process_list.len());
         if self.process_list.is_empty() {
             return false;
         }
@@ -695,25 +702,29 @@ Use the `--produce-script myscript.sh` option for this.";
             let p = &mut self.process_list[i];
             let pid = p.1.child.id();
             let tid = p.0;
-            let mut return_code = 0;
+            let mut return_code = -1;
 
             if !self.arguments.dry_run {
-                return_code = match p.1.child.try_wait() {
-                    Ok(Some(status)) => status.code().unwrap_or(0),
-                    Ok(None) => 0,
-                    Err(_) => 0,
+                //let r1: Result<Option<ExitStatus>, Error> = p.1.child.try_wait();
+                //println!("# Exit status of {} {}", p.1.child.id(), r1);
+
+                match p.1.child.try_wait() {
+                    Ok(Some(status)) => return_code = status.code().unwrap_or(0),
+                    Ok(None) => return_code = -1,
+                    Err(_) => return_code = 1,
                 };
+                println!("Exit status of {} {}", p.1.child.id(), return_code)
             }
 
-            if return_code != 0 {
+            if return_code != -1 {
                 self.action_logger.info(&format!(
-                    "Task {} {}: {} finished with status {}",
-                    pid, tid, self.id_to_task[tid], return_code
-                ));
-                self.resource_manager.unbook(tid);
-                self.procstatus.insert(tid, "Done");
-                finished.push(tid);
-                self.process_list.remove(i);
+                      "Task {} {}: {} finished with status {}",
+                      pid, tid, self.id_to_task[tid], return_code
+                    ));
+                    self.resource_manager.unbook(tid);
+                    self.procstatus.insert(tid, "Done");
+                    finished.push(tid);
+                    self.process_list.remove(i);
 
                 if return_code != 0 {
                     println!("{} failed ... checking retry", self.id_to_task[tid]);
@@ -796,7 +807,15 @@ Use the `--produce-script myscript.sh` option for this.";
                 if let Some(nice) = p.nice {
                     self.resource_manager.book(tid, nice);
                     self.process_list.push((tid, p));
-                    task_candidates.remove(tid);
+                    
+                    // we need to remove the index corresponding to tid
+                    let tmp : isize = tid.try_into().unwrap();
+                    if let Some(index) = task_candidates.iter().position(|&r| r == tmp) {
+                        task_candidates.remove(index);
+                    } else {
+                        println!("Element {} not found in the Vec.", tid);
+                    }
+
                     thread::sleep(Duration::from_millis(100));
                 }
             }
