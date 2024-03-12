@@ -349,7 +349,7 @@ impl<'a> WorkflowExecutor<'a> {
             .unwrap();
 
         unsafe {
-            setpriority(PRIO_PROCESS, p.id() as u32, nice as i32);
+            setpriority(PRIO_PROCESS, p.id() as u32, 20 - nice as i32);
         }
 
         Some(p)
@@ -798,7 +798,7 @@ Use the `--produce-script myscript.sh` option for this.";
             if let Some(p) = self.submit(tid, nice_value) {
                 unsafe {
                     self.resource_manager
-                        .book(tid, getpriority(PRIO_PROCESS, p.id() as u32));
+                        .book(tid, 20 - getpriority(PRIO_PROCESS, p.id() as u32));
                     self.process_list.push((tid, p));
                 }
 
