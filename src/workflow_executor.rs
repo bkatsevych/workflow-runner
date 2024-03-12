@@ -3,16 +3,13 @@ use crate::graph::Graph;
 use crate::logger::Logger;
 use crate::resource_manager::ResourceManager;
 use crate::utils::load_json;
-// use alloc::task;
-use libc::{setpriority, PRIO_PROCESS};
+use libc::{getpriority, setpriority, PRIO_PROCESS};
 use regex::Regex;
 use serde_json::Map;
 pub use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs;
-use std::fs::File;
-use std::io::Write;
 use std::path::Path;
 use std::process;
 use std::process::Child;
@@ -22,11 +19,6 @@ use std::time::Duration;
 use std::time::Instant;
 use sysinfo::{CpuRefreshKind, RefreshKind, System};
 use tar::Builder;
-
-struct ChildWithOptionalNice {
-    child: Child,
-    nice: Option<i32>,
-}
 
 struct DagProperties {
     next_tasks: HashMap<isize, Vec<isize>>,
@@ -53,7 +45,7 @@ pub struct WorkflowExecutor<'a> {
     taskneeds: HashMap<String, HashSet<String>>,
     stop_on_failure: bool,
     scheduling_iteration: u32,
-    process_list: Vec<(usize, ChildWithOptionalNice)>,
+    process_list: Vec<(usize, Child)>,
     backfill_process_list: Vec<String>,
     pid_to_psutilsproc: HashMap<u32, String>,
     pid_to_files: HashMap<u32, String>,
@@ -175,7 +167,7 @@ impl<'a> WorkflowExecutor<'a> {
         println!("Stop on failure: {}", stop_on_failure);
 
         let mut scheduling_iteration: u32 = 0; // count how often it was tried to schedule new tasks
-        let mut process_list: Vec<(usize, ChildWithOptionalNice)> = Vec::new(); // list of currently scheduled tasks with normal priority
+        let mut process_list: Vec<(usize, Child)> = Vec::new(); // list of currently scheduled tasks with normal priority
         let mut backfill_process_list: Vec<String> = Vec::new(); // list of currently scheduled tasks with low backfill priority (not sure this is needed)
         let mut pid_to_psutilsproc: HashMap<u32, String> = HashMap::new(); // cache of putilsproc for resource monitoring
         let mut pid_to_files: HashMap<u32, String> = HashMap::new(); // we can auto-detect what files are produced by which task (at least to some extent)
@@ -287,7 +279,7 @@ impl<'a> WorkflowExecutor<'a> {
         }
     }
 
-    fn submit(&mut self, tid: usize, nice: i32) -> Option<ChildWithOptionalNice> {
+    fn submit(&mut self, tid: usize, nice: i32) -> Option<Child> {
         self.action_logger.debug(&format!(
             "Submitting task {} with nice value {}",
             self.id_to_task[tid], nice
@@ -314,15 +306,14 @@ impl<'a> WorkflowExecutor<'a> {
                 self.scheduling_iteration, self.workflow_spec["stages"][tid]["name"]
             );
 
-            return Some(ChildWithOptionalNice {
-                child: Command::new("/bin/bash")
+            return Some(
+                Command::new("/bin/bash")
                     .arg("-c")
                     .arg(drycommand)
                     .current_dir(workdir)
                     .spawn()
                     .unwrap(),
-                nice: None,
-            });
+            );
         }
 
         let mut taskenv = std::env::vars().collect::<HashMap<String, String>>();
@@ -361,10 +352,7 @@ impl<'a> WorkflowExecutor<'a> {
             setpriority(PRIO_PROCESS, p.id() as u32, nice as i32);
         }
 
-        Some(ChildWithOptionalNice {
-            child: p,
-            nice: Some(nice),
-        })
+        Some(p)
     }
 
     fn noprogress_errormsg(&self) {
@@ -394,9 +382,9 @@ Use the `--produce-script myscript.sh` option for this.";
         // Refresh CPUs again.
         s.refresh_cpu();
 
-       // for cpu in s.cpus() {
-       //     println!("CPU: {}%", cpu.cpu_usage());
-       // }
+        // for cpu in s.cpus() {
+        //     println!("CPU: {}%", cpu.cpu_usage());
+        // }
 
         env::set_var("JOBUTILS_SKIPDONE", "ON");
 
@@ -487,25 +475,24 @@ Use the `--produce-script myscript.sh` option for this.";
 
         println!("candidates: {:?}", candidates);
 
-       // sort candidate list according to task weights
-       let mut candidates: Vec<(isize, (i32, i32))> = candidates
-        .iter()
-        .map(|&tid| (tid, self.taskweights[tid as usize]))
-        .collect();
+        // sort candidate list according to task weights
+        let mut candidates: Vec<(isize, (i32, i32))> = candidates
+            .iter()
+            .map(|&tid| (tid, self.taskweights[tid as usize]))
+            .collect();
 
-       candidates.sort_by(|a, b| {
-         let a_key = (a.1 .0, -(a.1 .1));
-         let b_key = (b.1 .0, -(b.1 .1));
-         a_key.cmp(&b_key)
-       });
+        candidates.sort_by(|a, b| {
+            let a_key = (a.1 .0, -(a.1 .1));
+            let b_key = (b.1 .0, -(b.1 .1));
+            a_key.cmp(&b_key)
+        });
 
-        let mut candidates_without_weights: Vec<isize> = candidates.into_iter().map(|(tid, _)| tid).collect();
-
+        let mut candidates_without_weights: Vec<isize> =
+            candidates.into_iter().map(|(tid, _)| tid).collect();
 
         loop {
-                        
             let mut finished: Vec<isize> = Vec::new();
-            
+
             //let sorted_candidates: Vec<_> = candidates_without_weights
             //    .iter()
             //    .map(|&c| (c, self.id_to_task[c as usize].clone()))
@@ -513,10 +500,13 @@ Use the `--produce-script myscript.sh` option for this.";
 
             //self.action_logger.debug(&format!(
             //    "Sorted current candidates: {:?}",
-             //   sorted_candidates
+            //   sorted_candidates
             //));
-            
-            println!("Sorted current candidates: {:?}", candidates_without_weights);
+
+            println!(
+                "Sorted current candidates: {:?}",
+                candidates_without_weights
+            );
 
             self.try_jobs_from_candidates(&mut candidates_without_weights, &mut finished);
 
@@ -592,7 +582,6 @@ Use the `--produce-script myscript.sh` option for this.";
             self.action_logger
                 .debug(&format!("New candidates {:?}", candidates_without_weights));
 
-            
             if candidates_without_weights.is_empty() && self.process_list.is_empty() {
                 break;
             }
@@ -663,35 +652,38 @@ Use the `--produce-script myscript.sh` option for this.";
     }
 
     // WIP !!!
-    fn monitor(&mut self) {
-        self.internal_monitor_counter += 1;
-        if self.internal_monitor_counter % 5 != 0 {
-            return;
-        }
+    // fn monitor(&mut self) {
+    //     self.internal_monitor_counter += 1;
+    //     if self.internal_monitor_counter % 5 != 0 {
+    //         return;
+    //     }
 
-        self.internal_monitor_id += 1;
+    //     self.internal_monitor_id += 1;
 
-        let global_cpu: f64 = 0.0;
-        let global_pss: f64 = 0.0;
-        // resources_per_task = {}
+    //     let global_cpu: f64 = 0.0;
+    //     let global_pss: f64 = 0.0;
+    //     // resources_per_task = {}
 
-        for (tid, proc) in &self.process_list {
-            let pid = proc.child.id();
+    //     for (tid, proc) in &self.process_list {
+    //         let pid = proc.child.id();
 
-            if self.pid_to_files.get(&pid).is_none() {
-                self.pid_to_files.insert(pid, String::new());
-                self.pid_to_connections.insert(pid, String::new());
-            }
-            let mut child_procs: Vec<&ChildWithOptionalNice> = Vec::new();
-            child_procs.push(proc);
-        }
-    }
+    //         if self.pid_to_files.get(&pid).is_none() {
+    //             self.pid_to_files.insert(pid, String::new());
+    //             self.pid_to_connections.insert(pid, String::new());
+    //         }
+    //         let mut child_procs: Vec<&ChildWithOptionalNice> = Vec::new();
+    //         child_procs.push(proc);
+    //     }
+    // }
 
     fn wait_for_any(&mut self, finished: &mut Vec<usize>, failingtasks: &mut Vec<usize>) -> bool {
         let mut failure_detected = false;
         let mut failing_pids: Vec<u32> = Vec::new();
 
-        println!("Waiting for process. Current process list has length {} ", self.process_list.len());
+        println!(
+            "Waiting for process. Current process list has length {} ",
+            self.process_list.len()
+        );
         if self.process_list.is_empty() {
             return false;
         }
@@ -700,7 +692,7 @@ Use the `--produce-script myscript.sh` option for this.";
         while i != 0 {
             i -= 1;
             let p = &mut self.process_list[i];
-            let pid = p.1.child.id();
+            let pid = p.1.id();
             let tid = p.0;
             let mut return_code = -1;
 
@@ -708,23 +700,23 @@ Use the `--produce-script myscript.sh` option for this.";
                 //let r1: Result<Option<ExitStatus>, Error> = p.1.child.try_wait();
                 //println!("# Exit status of {} {}", p.1.child.id(), r1);
 
-                match p.1.child.try_wait() {
+                match p.1.try_wait() {
                     Ok(Some(status)) => return_code = status.code().unwrap_or(0),
                     Ok(None) => return_code = -1,
                     Err(_) => return_code = 1,
                 };
-                println!("Exit status of {} {}", p.1.child.id(), return_code)
+                println!("Exit status of {} {}", p.1.id(), return_code)
             }
 
             if return_code != -1 {
                 self.action_logger.info(&format!(
-                      "Task {} {}: {} finished with status {}",
-                      pid, tid, self.id_to_task[tid], return_code
-                    ));
-                    self.resource_manager.unbook(tid);
-                    self.procstatus.insert(tid, "Done");
-                    finished.push(tid);
-                    self.process_list.remove(i);
+                    "Task {} {}: {} finished with status {}",
+                    pid, tid, self.id_to_task[tid], return_code
+                ));
+                self.resource_manager.unbook(tid);
+                self.procstatus.insert(tid, "Done");
+                finished.push(tid);
+                self.process_list.remove(i);
 
                 if return_code != 0 {
                     println!("{} failed ... checking retry", self.id_to_task[tid]);
@@ -766,7 +758,7 @@ Use the `--produce-script myscript.sh` option for this.";
 
     fn stop_pipeline_and_exit(&mut self) {
         for p in &mut self.process_list {
-            p.1.child.kill().unwrap();
+            p.1.kill().unwrap();
         }
 
         std::process::exit(1);
@@ -804,20 +796,21 @@ Use the `--produce-script myscript.sh` option for this.";
                     .debug(&format!("trying to submit {}:{}", tid, task));
             }
             if let Some(p) = self.submit(tid, nice_value) {
-                if let Some(nice) = p.nice {
-                    self.resource_manager.book(tid, nice);
+                unsafe {
+                    self.resource_manager
+                        .book(tid, getpriority(PRIO_PROCESS, p.id() as u32));
                     self.process_list.push((tid, p));
-                    
-                    // we need to remove the index corresponding to tid
-                    let tmp : isize = tid.try_into().unwrap();
-                    if let Some(index) = task_candidates.iter().position(|&r| r == tmp) {
-                        task_candidates.remove(index);
-                    } else {
-                        println!("Element {} not found in the Vec.", tid);
-                    }
-
-                    thread::sleep(Duration::from_millis(100));
                 }
+
+                // we need to remove the index corresponding to tid
+                let tmp: isize = tid.try_into().unwrap();
+                if let Some(index) = task_candidates.iter().position(|&r| r == tmp) {
+                    task_candidates.remove(index);
+                } else {
+                    println!("Element {} not found in the Vec.", tid);
+                }
+
+                thread::sleep(Duration::from_millis(100));
             }
         }
     }
