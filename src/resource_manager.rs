@@ -181,6 +181,44 @@ impl ResourceBoundaries {
     }
 }
 
+pub struct OkToSubmitIter<'a> {
+    manager: &'a mut ResourceManager,
+    tids: &'a mut Vec<isize>,
+    tid_index: usize,
+    ok_to_submit_impl: Option<fn(&mut ResourceManager, &TaskResources) -> Option<i32>>,
+    should_break: bool,
+}
+
+impl<'a> Iterator for OkToSubmitIter<'a> {
+    type Item = (usize, i32);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while self.tid_index < self.tids.len() {
+            let tid = self.tids[self.tid_index];
+            let res = &mut self.manager.resources[tid as usize];
+
+            self.tid_index += 1;
+
+            if let Some(semaphore) = &res.semaphore {
+                if semaphore.locked || res.booked {
+                    continue;
+                }
+            }
+
+            if let Some(ok_to_submit_impl) = self.ok_to_submit_impl {
+                if let Some(nice_value) = ok_to_submit_impl(self.manager, res) {
+                    res.nice_value = Some(nice_value);
+                    return Some((tid as usize, nice_value));
+                }
+            } else if self.should_break {
+                break;
+            }
+        }
+
+        None
+    }
+}
+
 pub struct ResourceManager {
     resources: Vec<TaskResources>,
     resources_related_tasks_dict: HashMap<String, Vec<TaskResources>>,
@@ -285,84 +323,63 @@ impl ResourceManager {
         }
     }
 
-    pub fn ok_to_submit(&mut self, tids: &mut Vec<isize>) -> Option<(usize, i32)> {
-        let tids_copy = tids.clone();
+    fn ok_to_submit_default(&mut self, res: &TaskResources) -> Option<i32> {
+        let okcpu = self.cpu_booked + res.cpu_assigned <= self.resource_boundaries.cpu_limit as f64;
+        let okmem = self.mem_booked + res.mem_assigned <= self.resource_boundaries.mem_limit as f64;
+        if okcpu && okmem {
+            Some(self.nice_default)
+        } else {
+            None
+        }
+    }
 
-        let ok_to_submit_default = |res: &TaskResources| -> Option<i32> {
-            let okcpu =
-                (self.cpu_booked + res.cpu_assigned <= self.resource_boundaries.cpu_limit as f64);
-            let okmem =
-                (self.mem_booked + res.mem_assigned <= self.resource_boundaries.mem_limit as f64);
-            if okcpu && okmem {
-                Some(self.nice_default)
-            } else {
-                None
-            }
-        };
-
-        let ok_to_submit_backfill = |res: &TaskResources| -> Option<i32> {
-            if self.n_procs_backfill >= self.procs_parallel_max {
-                return None;
-            }
-
-            if res.cpu_assigned > 0.9 * self.resource_boundaries.cpu_limit as f64
-                || res.mem_assigned / self.resource_boundaries.cpu_limit as f64 >= 1900.0
-            {
-                return None;
-            }
-
-            let okcpu = (self.cpu_booked_backfill + res.cpu_assigned
-                <= self.resource_boundaries.cpu_limit as f64);
-            let okcpu = okcpu
-                && (self.cpu_booked + self.cpu_booked_backfill + res.cpu_assigned
-                    <= 1.5 * self.resource_boundaries.cpu_limit as f64);
-            let okmem = (self.mem_booked + self.mem_booked_backfill + res.mem_assigned
-                <= 1.5 * self.resource_boundaries.mem_limit as f64);
-
-            if okcpu && okmem {
-                Some(self.nice_backfill)
-            } else {
-                None
-            }
-        };
-
-        if self.n_procs + self.n_procs_backfill >= self.procs_parallel_max {
+    fn ok_to_submit_backfill(&mut self, res: &TaskResources) -> Option<i32> {
+        if res.cpu_assigned > 0.9 * self.resource_boundaries.cpu_limit as f64
+            || res.mem_assigned / self.resource_boundaries.mem_limit as f64 >= 1900.0
+        {
             return None;
         }
 
-        for (ok_to_submit_impl, should_break) in vec![
-            (
-                Box::new(ok_to_submit_default) as Box<dyn Fn(&TaskResources) -> Option<i32>>,
-                true,
-            ),
-            (
-                Box::new(ok_to_submit_backfill) as Box<dyn Fn(&TaskResources) -> Option<i32>>,
-                false,
-            ),
-        ] {
-            let mut tid_index = 0;
-            while tid_index < tids_copy.len() {
-                let tid = tids_copy[tid_index];
-                let res = &mut self.resources[tid as usize];
+        let okcpu = self.cpu_booked_backfill + res.cpu_assigned
+            <= self.resource_boundaries.cpu_limit as f64;
+        let okcpu = okcpu
+            && (self.cpu_booked + self.cpu_booked_backfill + res.cpu_assigned
+                <= 1.5 * self.resource_boundaries.cpu_limit as f64);
+        let okmem = (self.mem_booked + self.mem_booked_backfill + res.mem_assigned
+            <= 1.5 * self.resource_boundaries.mem_limit as f64);
+        if okcpu && okmem {
+            Some(self.nice_backfill)
+        } else {
+            None
+        }
+    }
 
-                tid_index += 1;
-
-                if let Some(semaphore) = &res.semaphore {
-                    if semaphore.locked || res.booked {
-                        continue;
-                    }
-                }
-
-                if let Some(nice_value) = ok_to_submit_impl(res) {
-                    res.nice_value = Some(nice_value);
-                    return Some((tid as usize, nice_value));
-                } else if should_break {
-                    break;
-                }
-            }
+    pub fn ok_to_submit(
+        &mut self,
+        tids: &mut Vec<isize>,
+    ) -> Box<dyn Iterator<Item = (usize, i32)> + '_> {
+        if self.n_procs + self.n_procs_backfill >= self.procs_parallel_max {
+            // In this case, nothing can be done
+            return Box::new(std::iter::empty());
         }
 
-        None
+        let iter_default = OkToSubmitIter {
+            manager: self,
+            tids,
+            tid_index: 0,
+            ok_to_submit_impl: Some(Self::ok_to_submit_default),
+            should_break: true,
+        };
+
+        let iter_backfill = OkToSubmitIter {
+            manager: self,
+            tids,
+            tid_index: 0,
+            ok_to_submit_impl: Some(Self::ok_to_submit_backfill),
+            should_break: false,
+        };
+
+        Box::new(iter_default.chain(iter_backfill))
     }
 
     pub fn book(&mut self, tid: usize, nice_value: i32) {
