@@ -69,7 +69,7 @@ pub struct Arguments {
 
     /// Set memory limit as scheduling constraint (in MB)
     #[arg(long, default_value_t = default_mem_limit())]
-    pub mem_limit: u32,
+    pub mem_limit: u64,
 
     /// Set CPU limit (core count)
     #[arg(long, default_value_t = 8)]
@@ -112,9 +112,9 @@ pub struct Arguments {
     pub production_mode: bool,
 }
 
-fn default_mem_limit() -> u32 {
+fn default_mem_limit() -> u64 {
     let system = System::new_all();
     let max_system_mem = system.total_memory() as f64;
 
-    (0.9 * max_system_mem / 1024. / 1024.) as u32
+    (0.9 * max_system_mem / 1024. / 1024.) as u64
 }

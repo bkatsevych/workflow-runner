@@ -21,7 +21,7 @@ pub fn kill_child_procs() {
     let processes = system.processes();
 
     for (&pid, proc) in processes {
-        if proc.parent() == Some(sysinfo::Pid::from_u32(current_pid as u32)) {
+        if proc.parent() == Some(sysinfo::Pid::from_u32(current_pid)) {
             println!("Terminating {}", pid);
             proc.kill_with(Signal::Term);
             println!("Waiting for {} termination", pid);
@@ -33,4 +33,17 @@ pub fn kill_child_procs() {
     }
 
     process::exit(1);
+}
+
+pub fn children(pid: u32, system: &System) -> Vec<Pid> {
+    let mut children = Vec::new();
+    let processes = system.processes();
+
+    for (&p, proc) in processes {
+        if proc.parent() == Some(Pid::from_u32(pid)) {
+            children.push(p);
+        }
+    }
+
+    children
 }

@@ -15,7 +15,6 @@ rustix = {version = "0.38.31", features = ["process"]}
 ctrlc = "3.4.2"
 nix = "0.27.1"
 libc = "0.2.153"
-psutil = "3.3.0"
 tar = "0.4.40"
 
 
