@@ -35,13 +35,13 @@ pub fn kill_child_procs() {
     process::exit(1);
 }
 
-pub fn children(pid: u32, system: &System) -> Vec<Pid> {
+pub fn children(pid: u32, system: &System) -> Vec<&Process> {
     let mut children = Vec::new();
     let processes = system.processes();
 
     for (&p, proc) in processes {
         if proc.parent() == Some(Pid::from_u32(pid)) {
-            children.push(p);
+            children.push(proc);
         }
     }
 
