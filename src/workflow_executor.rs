@@ -2,7 +2,7 @@ use crate::arguments::Arguments;
 use crate::graph::Graph;
 use crate::logger::Logger;
 use crate::resource_manager::ResourceManager;
-use crate::utils::{children, load_json};
+use crate::utils::{find_child_processes_recursive, load_json};
 use libc::{getpriority, setpriority, PRIO_PROCESS};
 use regex::Regex;
 use serde_json::Map;
@@ -47,9 +47,6 @@ pub struct WorkflowExecutor<'a> {
     scheduling_iteration: u32,
     process_list: Vec<(usize, Child)>,
     backfill_process_list: Vec<String>,
-    pid_to_sysinfo_proc: HashMap<Pid, &'a Process>,
-    pid_to_files: HashMap<u32, HashSet<u32>>,
-    pid_to_connections: HashMap<u32, HashSet<u32>>,
     internal_monitor_counter: i32,
     internal_monitor_id: i32,
     tids_marked_to_retry: Vec<usize>,
@@ -57,7 +54,6 @@ pub struct WorkflowExecutor<'a> {
     task_retries: Vec<i64>,
     alternative_envs: HashMap<String, HashMap<String, String>>,
     start_time: Option<Instant>,
-    sysinfo: System,
 }
 
 impl<'a> WorkflowExecutor<'a> {
@@ -168,17 +164,14 @@ impl<'a> WorkflowExecutor<'a> {
 
         println!("Stop on failure: {}", stop_on_failure);
 
-        let mut scheduling_iteration: u32 = 0; // count how often it was tried to schedule new tasks
-        let mut process_list: Vec<(usize, Child)> = Vec::new(); // list of currently scheduled tasks with normal priority
-        let mut backfill_process_list: Vec<String> = Vec::new(); // list of currently scheduled tasks with low backfill priority (not sure this is needed)
-        let mut pid_to_sysinfo_proc: HashMap<Pid, &Process> = HashMap::new(); // cache of putilsproc for resource monitoring
-        let mut pid_to_files: HashMap<u32, HashSet<u32>> = HashMap::new();
-        let mut pid_to_connections: HashMap<u32, HashSet<u32>> = HashMap::new();
-        let mut internal_monitor_counter: i32 = 0; // internal use
-        let mut internal_monitor_id: i32 = 0; // internal use
-        let mut tids_marked_to_retry: Vec<usize> = Vec::new(); // sometimes we might want to retry a failed task (simply because it was "unlucky") and we put them here
+        let scheduling_iteration: u32 = 0; // count how often it was tried to schedule new tasks
+        let process_list: Vec<(usize, Child)> = Vec::new(); // list of currently scheduled tasks with normal priority
+        let backfill_process_list: Vec<String> = Vec::new(); // list of currently scheduled tasks with low backfill priority (not sure this is needed)
+        let internal_monitor_counter: i32 = 0; // internal use
+        let internal_monitor_id: i32 = 0; // internal use
+        let tids_marked_to_retry: Vec<usize> = Vec::new(); // sometimes we might want to retry a failed task (simply because it was "unlucky") and we put them here
         let mut retry_counter: Vec<i32> = vec![0; taskuniverse.len()];
-        let mut task_retries: Vec<i64> = taskuniverse
+        let task_retries: Vec<i64> = taskuniverse
             .iter()
             .enumerate()
             .map(|(tid, _)| {
@@ -214,9 +207,6 @@ impl<'a> WorkflowExecutor<'a> {
             scheduling_iteration,
             process_list,
             backfill_process_list,
-            pid_to_sysinfo_proc,
-            pid_to_files,
-            pid_to_connections,
             internal_monitor_counter,
             internal_monitor_id,
             tids_marked_to_retry,
@@ -224,7 +214,6 @@ impl<'a> WorkflowExecutor<'a> {
             task_retries,
             alternative_envs,
             start_time: None,
-            sysinfo,
         }
     }
 
@@ -475,6 +464,9 @@ Use the `--produce-script myscript.sh` option for this.";
             None => Vec::new(),
         };
         let mut finished_tasks: Vec<usize> = Vec::new(); // Vector of finished tasks
+        
+        // instance use to query memory / cpu for process pids
+        let mut system = sysinfo::System::new_all();
 
         println!("candidates: {:?}", candidates);
 
@@ -528,10 +520,11 @@ Use the `--produce-script myscript.sh` option for this.";
 
             while self.wait_for_any(&mut finished_from_started, &mut failing) {
                 if !self.arguments.dry_run {
-                    self.internal_monitor_counter += 1;
-
+                    
                     if self.internal_monitor_counter % 5 == 0 {
                         self.internal_monitor_id += 1;
+
+                        println!("DOING MONITORING");
 
                         let mut global_cpu: f32 = 0.0;
                         let mut global_rss: u64 = 0;
@@ -542,28 +535,27 @@ Use the `--produce-script myscript.sh` option for this.";
 
                         for (tid, proc) in &self.process_list {
                             let pid = proc.id();
-                            let mut sysinfo_procs = Vec::new();
+                            let mut allprocs: Vec<Pid> = Vec::new();
 
-                            sysinfo_procs.push(self.sysinfo.process(Pid::from_u32(pid)).unwrap());
-                            sysinfo_procs.extend(children(pid, &self.sysinfo));
+                            allprocs.push(Pid::from_u32(pid));
+                            allprocs.extend(find_child_processes_recursive(&system, Pid::from_u32(pid)));
 
                             // accumulate total metrics
                             let mut total_cpu = 0.0;
                             let mut total_rss: u64 = 0;
 
-                            for p in sysinfo_procs {
+                            for child_proc_id in allprocs {
                                 let mut this_rss: u64 = 0;
 
-                                // MEMORY part
-                                this_rss = p.memory();
-                                total_rss += this_rss;
+                                // get process reference
+                                if let Some(p) = system.process(child_proc_id) {
+                                  // MEMORY part
+                                  this_rss = p.memory();
+                                  total_rss += this_rss;
 
-                                // CPU part
-                                if let Some(cached_proc) = self.pid_to_sysinfo_proc.get(&p.pid()) {
-                                    let this_cpu = cached_proc.cpu_usage();
-                                    total_cpu += this_cpu;
-                                } else {
-                                    self.pid_to_sysinfo_proc.insert(p.pid(), p);
+                                  // CPU part
+                                  let this_cpu = p.cpu_usage();
+                                  total_cpu += this_cpu;
                                 }
                             }
                             let time_delta = self
@@ -621,6 +613,7 @@ Use the `--produce-script myscript.sh` option for this.";
                         }
                     }
                     thread::sleep(Duration::from_secs(1));
+                    self.internal_monitor_counter += 1;
                 } else {
                     thread::sleep(Duration::from_millis(1));
                 }
@@ -724,7 +717,7 @@ Use the `--produce-script myscript.sh` option for this.";
         let timef = format!("{}_time", logf);
 
         let tar_path = "pipeline_log_archive.log.tar";
-        let mut tar_file = fs::OpenOptions::new()
+        let tar_file = fs::OpenOptions::new()
             .read(true)
             .write(true)
             .create(true)
@@ -920,8 +913,8 @@ Use the `--produce-script myscript.sh` option for this.";
         std::process::exit(1);
     }
 
-    fn is_worth_retrying(&self, tid: usize) -> bool {
-        /// WIP
+    fn is_worth_retrying(&self, _tid: usize) -> bool {
+        // WIP
         // # This checks for some signatures in logfiles that indicate that a retry of this task
         // # might have a chance.
         // # Ideally, this should be made user configurable. Either the user could inject a lambda
