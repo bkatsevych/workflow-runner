@@ -7,7 +7,7 @@ use libc::{getpriority, setpriority, PRIO_PROCESS};
 use regex::Regex;
 use serde_json::Map;
 pub use serde_json::Value;
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::env;
 use std::fs;
 use std::path::Path;
@@ -654,8 +654,8 @@ Use the `--produce-script myscript.sh` option for this.";
 
             let mut global_cpu: f32 = 0.0;
             let mut global_rss: u64 = 0;
-            let mut resources_per_task: HashMap<&usize, HashMap<&str, serde_json::Value>> =
-                HashMap::new();
+            let mut resources_per_task: BTreeMap<&usize, BTreeMap<&str, serde_json::Value>> =
+                BTreeMap::new();
 
             for (tid, proc) in &self.process_list {
                 let pid = proc.id();
@@ -689,7 +689,7 @@ Use the `--produce-script myscript.sh` option for this.";
                 total_rss = total_rss / 1024 / 1024;
 
                 let nice_value = unsafe { getpriority(PRIO_PROCESS, pid) };
-                let mut task_resources: HashMap<&str, serde_json::Value> = HashMap::new();
+                let mut task_resources: BTreeMap<&str, serde_json::Value> = BTreeMap::new();
 
                 task_resources.insert(
                     "iter",
