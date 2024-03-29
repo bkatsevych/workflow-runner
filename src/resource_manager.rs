@@ -1,5 +1,5 @@
 use rustix::process::nice;
-use serde_json::de;
+// use serde_json::de;
 use std::collections::HashMap;
 
 #[derive(Clone, Debug)]
@@ -290,9 +290,9 @@ impl ResourceManager {
 
         let ok_to_submit_default = |res: &TaskResources| -> Option<i32> {
             let okcpu =
-                (self.cpu_booked + res.cpu_assigned <= self.resource_boundaries.cpu_limit as f64);
+                self.cpu_booked + res.cpu_assigned <= self.resource_boundaries.cpu_limit as f64;
             let okmem =
-                (self.mem_booked + res.mem_assigned <= self.resource_boundaries.mem_limit as f64);
+                self.mem_booked + res.mem_assigned <= self.resource_boundaries.mem_limit as f64;
             if okcpu && okmem {
                 Some(self.nice_default)
             } else {
@@ -311,13 +311,13 @@ impl ResourceManager {
                 return None;
             }
 
-            let okcpu = (self.cpu_booked_backfill + res.cpu_assigned
-                <= self.resource_boundaries.cpu_limit as f64);
+            let okcpu = self.cpu_booked_backfill + res.cpu_assigned
+                <= self.resource_boundaries.cpu_limit as f64;
             let okcpu = okcpu
                 && (self.cpu_booked + self.cpu_booked_backfill + res.cpu_assigned
                     <= 1.5 * self.resource_boundaries.cpu_limit as f64);
-            let okmem = (self.mem_booked + self.mem_booked_backfill + res.mem_assigned
-                <= 1.5 * self.resource_boundaries.mem_limit as f64);
+            let okmem = self.mem_booked + self.mem_booked_backfill + res.mem_assigned
+                <= 1.5 * self.resource_boundaries.mem_limit as f64;
 
             if okcpu && okmem {
                 Some(self.nice_backfill)

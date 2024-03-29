@@ -2,7 +2,7 @@ use crate::arguments::Arguments;
 use crate::graph::Graph;
 use crate::logger::Logger;
 use crate::resource_manager::ResourceManager;
-use crate::utils::{children, load_json};
+use crate::utils::{find_child_processes_recursive, load_json};
 use libc::{getpriority, setpriority, PRIO_PROCESS};
 use regex::Regex;
 use serde_json::Map;
@@ -47,9 +47,6 @@ pub struct WorkflowExecutor<'a> {
     scheduling_iteration: u32,
     process_list: Vec<(usize, Child)>,
     backfill_process_list: Vec<String>,
-    pid_to_sysinfo_proc: HashMap<Pid, &'a Process>,
-    pid_to_files: HashMap<u32, HashSet<u32>>,
-    pid_to_connections: HashMap<u32, HashSet<u32>>,
     internal_monitor_counter: i32,
     internal_monitor_id: i32,
     tids_marked_to_retry: Vec<usize>,
@@ -57,7 +54,6 @@ pub struct WorkflowExecutor<'a> {
     task_retries: Vec<i64>,
     alternative_envs: HashMap<String, HashMap<String, String>>,
     start_time: Option<Instant>,
-    sysinfo: System,
 }
 
 impl<'a> WorkflowExecutor<'a> {
@@ -168,17 +164,14 @@ impl<'a> WorkflowExecutor<'a> {
 
         println!("Stop on failure: {}", stop_on_failure);
 
-        let mut scheduling_iteration: u32 = 0; // count how often it was tried to schedule new tasks
-        let mut process_list: Vec<(usize, Child)> = Vec::new(); // list of currently scheduled tasks with normal priority
-        let mut backfill_process_list: Vec<String> = Vec::new(); // list of currently scheduled tasks with low backfill priority (not sure this is needed)
-        let mut pid_to_sysinfo_proc: HashMap<Pid, &Process> = HashMap::new(); // cache of putilsproc for resource monitoring
-        let mut pid_to_files: HashMap<u32, HashSet<u32>> = HashMap::new();
-        let mut pid_to_connections: HashMap<u32, HashSet<u32>> = HashMap::new();
-        let mut internal_monitor_counter: i32 = 0; // internal use
-        let mut internal_monitor_id: i32 = 0; // internal use
-        let mut tids_marked_to_retry: Vec<usize> = Vec::new(); // sometimes we might want to retry a failed task (simply because it was "unlucky") and we put them here
+        let scheduling_iteration: u32 = 0; // count how often it was tried to schedule new tasks
+        let process_list: Vec<(usize, Child)> = Vec::new(); // list of currently scheduled tasks with normal priority
+        let backfill_process_list: Vec<String> = Vec::new(); // list of currently scheduled tasks with low backfill priority (not sure this is needed)
+        let internal_monitor_counter: i32 = 0; // internal use
+        let internal_monitor_id: i32 = 0; // internal use
+        let tids_marked_to_retry: Vec<usize> = Vec::new(); // sometimes we might want to retry a failed task (simply because it was "unlucky") and we put them here
         let mut retry_counter: Vec<i32> = vec![0; taskuniverse.len()];
-        let mut task_retries: Vec<i64> = taskuniverse
+        let task_retries: Vec<i64> = taskuniverse
             .iter()
             .enumerate()
             .map(|(tid, _)| {
@@ -214,9 +207,6 @@ impl<'a> WorkflowExecutor<'a> {
             scheduling_iteration,
             process_list,
             backfill_process_list,
-            pid_to_sysinfo_proc,
-            pid_to_files,
-            pid_to_connections,
             internal_monitor_counter,
             internal_monitor_id,
             tids_marked_to_retry,
@@ -224,7 +214,6 @@ impl<'a> WorkflowExecutor<'a> {
             task_retries,
             alternative_envs,
             start_time: None,
-            sysinfo,
         }
     }
 
@@ -375,7 +364,7 @@ Use the `--produce-script myscript.sh` option for this.";
         eprintln!("{}", msg);
     }
 
-    pub fn execute(&mut self) -> bool {
+    pub fn execute(&'a mut self) -> bool {
         self.start_time = Some(Instant::now());
         let mut s =
             System::new_with_specifics(RefreshKind::new().with_cpu(CpuRefreshKind::everything()));
@@ -475,6 +464,9 @@ Use the `--produce-script myscript.sh` option for this.";
             None => Vec::new(),
         };
         let mut finished_tasks: Vec<usize> = Vec::new(); // Vector of finished tasks
+        
+        // instance use to query memory / cpu for process pids
+        let mut system = sysinfo::System::new_all();
 
         println!("candidates: {:?}", candidates);
 
@@ -528,9 +520,100 @@ Use the `--produce-script myscript.sh` option for this.";
 
             while self.wait_for_any(&mut finished_from_started, &mut failing) {
                 if !self.arguments.dry_run {
-                    // TODO:
-                    // self.monitor();
+                    
+                    if self.internal_monitor_counter % 5 == 0 {
+                        self.internal_monitor_id += 1;
+
+                        println!("DOING MONITORING");
+
+                        let mut global_cpu: f32 = 0.0;
+                        let mut global_rss: u64 = 0;
+                        let mut resources_per_task: HashMap<
+                            &usize,
+                            HashMap<&str, serde_json::Value>,
+                        > = HashMap::new();
+
+                        for (tid, proc) in &self.process_list {
+                            let pid = proc.id();
+                            let mut allprocs: Vec<Pid> = Vec::new();
+
+                            allprocs.push(Pid::from_u32(pid));
+                            allprocs.extend(find_child_processes_recursive(&system, Pid::from_u32(pid)));
+
+                            // accumulate total metrics
+                            let mut total_cpu = 0.0;
+                            let mut total_rss: u64 = 0;
+
+                            for child_proc_id in allprocs {
+                                let mut this_rss: u64 = 0;
+
+                                // get process reference
+                                if let Some(p) = system.process(child_proc_id) {
+                                  // MEMORY part
+                                  this_rss = p.memory();
+                                  total_rss += this_rss;
+
+                                  // CPU part
+                                  let this_cpu = p.cpu_usage();
+                                  total_cpu += this_cpu;
+                                }
+                            }
+                            let time_delta = self
+                                .start_time
+                                .map_or(0, |t| Instant::now().duration_since(t).as_millis() as i32);
+
+                            total_rss = total_rss / 1024 / 1024;
+
+                            let nice_value = unsafe { getpriority(PRIO_PROCESS, pid) };
+                            let mut task_resources: HashMap<&str, serde_json::Value> =
+                                HashMap::new();
+
+                            task_resources.insert(
+                                "iter",
+                                serde_json::Value::Number(self.internal_monitor_id.into()),
+                            );
+                            task_resources.insert(
+                                "name",
+                                serde_json::Value::String(self.id_to_task[*tid].clone()),
+                            );
+                            task_resources.insert(
+                                "cpu",
+                                serde_json::Value::Number((total_cpu as u64).into()),
+                            );
+                            task_resources
+                                .insert("rss", serde_json::Value::Number(total_rss.into()));
+                            task_resources
+                                .insert("nice", serde_json::Value::Number(nice_value.into()));
+                            task_resources.insert(
+                                "label",
+                                self.workflow_spec["stages"][tid]["labels"].clone(),
+                            );
+
+                            resources_per_task.insert(tid, task_resources);
+
+                            self.resource_manager.add_monitored_resources(
+                                tid,
+                                time_delta,
+                                total_cpu / 100.0,
+                                total_rss,
+                            );
+
+                            if nice_value == self.resource_manager.nice_default {
+                                global_cpu += total_cpu;
+                                global_rss += total_rss;
+                            }
+
+                            self.metric_logger
+                                .info(&format!("{:?}", resources_per_task.get(tid).unwrap()));
+                        }
+
+                        if global_rss > self.resource_manager.resource_boundaries.mem_limit {
+                            self.metric_logger
+                                .info(&format!("***MEMORY LIMIT EXCEEDED***",));
+                        }
+                    }
                     thread::sleep(Duration::from_secs(1));
+                    self.internal_monitor_counter += 1;
                 } else {
                     thread::sleep(Duration::from_millis(1));
                 }
@@ -634,7 +717,7 @@ Use the `--produce-script myscript.sh` option for this.";
         let timef = format!("{}_time", logf);
 
         let tar_path = "pipeline_log_archive.log.tar";
-        let mut tar_file = fs::OpenOptions::new()
+        let tar_file = fs::OpenOptions::new()
             .read(true)
             .write(true)
             .create(true)
@@ -654,94 +737,93 @@ Use the `--produce-script myscript.sh` option for this.";
         fs::remove_file(timef).unwrap();
     }
 
-    #[cfg(target_os = "macos")]
-    fn monitor(&mut self) {
-        self.internal_monitor_counter += 1;
+    // fn monitor(&'a mut self) {
+    //     self.internal_monitor_counter += 1;
 
-        if self.internal_monitor_counter % 5 != 0 {
-            return;
-        }
+    //     if self.internal_monitor_counter % 5 != 0 {
+    //         return;
+    //     }
 
-        self.internal_monitor_id += 1;
+    //     self.internal_monitor_id += 1;
 
-        let mut global_cpu: f32 = 0.0;
-        let mut global_rss: u64 = 0;
-        let mut resources_per_task: HashMap<&usize, HashMap<&str, serde_json::Value>> =
-            HashMap::new();
+    //     let mut global_cpu: f32 = 0.0;
+    //     let mut global_rss: u64 = 0;
+    //     let mut resources_per_task: HashMap<&usize, HashMap<&str, serde_json::Value>> =
+    //         HashMap::new();
 
-        for (tid, proc) in &self.process_list {
-            let pid = proc.id();
-            let mut sysinfo_pids = Vec::new();
+    //     for (tid, proc) in &self.process_list {
+    //         let pid = proc.id();
+    //         let mut sysinfo_procs = Vec::new();
 
-            sysinfo_pids.push(Pid::from_u32(pid));
+    //         sysinfo_procs.push(Pid::from_u32(pid));
 
-            sysinfo_pids.extend(children(pid, &self.sysinfo));
+    //         sysinfo_procs.extend(children(pid, &self.sysinfo));
 
-            // accumulate total metrics
-            let mut total_cpu = 0.0;
-            let mut total_rss: u64 = 0;
+    //         // accumulate total metrics
+    //         let mut total_cpu = 0.0;
+    //         let mut total_rss: u64 = 0;
 
-            for p in sysinfo_pids {
-                let mut this_rss: u64 = 0;
+    //         for p in sysinfo_procs {
+    //             let mut this_rss: u64 = 0;
 
-                if let Some(process) = self.sysinfo.process(p) {
-                    // MEMORY part
-                    this_rss = process.memory();
-                    total_rss += this_rss;
+    //             if let Some(process) = sysinfo.process(p) {
+    //                 // MEMORY part
+    //                 this_rss = process.memory();
+    //                 total_rss += this_rss;
 
-                    // CPU part
-                    if let Some(cached_proc) = self.pid_to_sysinfo_proc.get(&p) {
-                        let this_cpu = cached_proc.cpu_usage();
-                        total_cpu += this_cpu;
-                    } else {
-                        self.pid_to_sysinfo_proc.insert(p, process);
-                    }
-                }
-            }
-            let time_delta = self
-                .start_time
-                .map_or(0, |t| Instant::now().duration_since(t).as_millis() as i32);
+    //                 // CPU part
+    //                 if let Some(cached_proc) = self.pid_to_sysinfo_proc.get(&p) {
+    //                     let this_cpu = cached_proc.cpu_usage();
+    //                     total_cpu += this_cpu;
+    //                 } else {
+    //                     self.pid_to_sysinfo_proc.insert(p, process);
+    //                 }
+    //             }
+    //         }
+    //         let time_delta = self
+    //             .start_time
+    //             .map_or(0, |t| Instant::now().duration_since(t).as_millis() as i32);
 
-            total_rss = total_rss / 1024 / 1024;
+    //         total_rss = total_rss / 1024 / 1024;
 
-            let nice_value = unsafe { getpriority(PRIO_PROCESS, pid) };
-            let mut task_resources: HashMap<&str, serde_json::Value> = HashMap::new();
+    //         let nice_value = unsafe { getpriority(PRIO_PROCESS, pid) };
+    //         let mut task_resources: HashMap<&str, serde_json::Value> = HashMap::new();
 
-            task_resources.insert(
-                "iter",
-                serde_json::Value::Number(self.internal_monitor_id.into()),
-            );
-            task_resources.insert(
-                "name",
-                serde_json::Value::String(self.id_to_task[*tid].clone()),
-            );
-            task_resources.insert("cpu", serde_json::Value::Number((total_cpu as u64).into()));
-            task_resources.insert("rss", serde_json::Value::Number(total_rss.into()));
-            task_resources.insert("nice", serde_json::Value::Number(nice_value.into()));
-            task_resources.insert("label", self.workflow_spec["stages"][tid]["labels"].clone());
+    //         task_resources.insert(
+    //             "iter",
+    //             serde_json::Value::Number(self.internal_monitor_id.into()),
+    //         );
+    //         task_resources.insert(
+    //             "name",
+    //             serde_json::Value::String(self.id_to_task[*tid].clone()),
+    //         );
+    //         task_resources.insert("cpu", serde_json::Value::Number((total_cpu as u64).into()));
+    //         task_resources.insert("rss", serde_json::Value::Number(total_rss.into()));
+    //         task_resources.insert("nice", serde_json::Value::Number(nice_value.into()));
+    //         task_resources.insert("label", self.workflow_spec["stages"][tid]["labels"].clone());
 
-            resources_per_task.insert(tid, task_resources);
+    //         resources_per_task.insert(tid, task_resources);
 
-            self.resource_manager.add_monitored_resources(
-                tid,
-                time_delta,
-                total_cpu / 100.0,
-                total_rss,
-            );
+    //         self.resource_manager.add_monitored_resources(
+    //             tid,
+    //             time_delta,
+    //             total_cpu / 100.0,
+    //             total_rss,
+    //         );
 
-            if nice_value == self.resource_manager.nice_default {
-                global_cpu += total_cpu;
-                global_rss += total_rss;
-            }
+    //         if nice_value == self.resource_manager.nice_default {
+    //             global_cpu += total_cpu;
+    //             global_rss += total_rss;
+    //         }
 
-            self.metric_logger
-                .info(&format!("{:?}", resources_per_task.get(tid).unwrap()));
-        }
-        if global_rss > self.resource_manager.resource_boundaries.mem_limit {
-            self.metric_logger
-                .info(&format!("***MEMORY LIMIT EXCEEDED***",));
-        }
-    }
+    //         self.metric_logger
+    //             .info(&format!("{:?}", resources_per_task.get(tid).unwrap()));
+    //     }
+    //     if global_rss > self.resource_manager.resource_boundaries.mem_limit {
+    //         self.metric_logger
+    //             .info(&format!("***MEMORY LIMIT EXCEEDED***",));
+    //     }
+    // }
 
     fn wait_for_any(&mut self, finished: &mut Vec<usize>, failingtasks: &mut Vec<usize>) -> bool {
         let mut failure_detected = false;
@@ -831,8 +913,8 @@ Use the `--produce-script myscript.sh` option for this.";
         std::process::exit(1);
     }
 
-    fn is_worth_retrying(&self, tid: usize) -> bool {
-        /// WIP
+    fn is_worth_retrying(&self, _tid: usize) -> bool {
+        // WIP
         // # This checks for some signatures in logfiles that indicate that a retry of this task
         // # might have a chance.
         // # Ideally, this should be made user configurable. Either the user could inject a lambda
