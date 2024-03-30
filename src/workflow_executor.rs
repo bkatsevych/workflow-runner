@@ -843,7 +843,7 @@ Use the `--produce-script myscript.sh` option for this.";
             }
         }
 
-        for (tid, nice_value) in self.resource_manager.ok_to_submit(task_candidates) {
+        while let Some((tid, nice_value)) = self.resource_manager.ok_to_submit(task_candidates) {
             if let Some(task) = self.id_to_task.get(tid) {
                 self.action_logger
                     .debug(&format!("trying to submit {}:{}", tid, task));
