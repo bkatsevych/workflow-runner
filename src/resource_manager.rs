@@ -365,22 +365,18 @@ impl ResourceManager {
         None
     }
 
-    pub fn book(&mut self, tid: usize, nice_value: i32) {
+    pub fn book(&mut self, tid: usize, mut nice_value: i32) {
         let res = &mut self.resources[tid];
         let previous_nice_value = res.nice_value;
 
-        match previous_nice_value {
-            None => {
-                println!(
-                    "Task ID {} has never been checked for resources. Treating as backfill",
-                    tid
-                );
-                res.nice_value = Some(self.nice_backfill);
-            }
-            Some(value) if value != nice_value => {
-                println!("Task ID {} was last time checked for a different nice value ({}) but is now submitted with ({}).", tid, value, nice_value);
-            }
-            _ => {}
+        if previous_nice_value.is_none() {
+            println!(
+                "Task ID {} has never been checked for resources. Treating as backfill",
+                tid
+            );
+            nice_value = self.nice_backfill;
+        } else if res.nice_value != Some(nice_value) {
+            println!("Task ID {} was last time checked for a different nice value ({}) but is now submitted with ({}).", tid, previous_nice_value.unwrap(), nice_value);
         }
 
         res.nice_value = Some(nice_value);
