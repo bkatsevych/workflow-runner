@@ -520,7 +520,7 @@
         },
         {
             "name": "aod_1",
-            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "cmd": "awk 'BEGIN { for (i = 0; i < 1000000; ++i) print i^2.5 }'",
             "needs": [
                 "pvfinder_1",
                 "svfinder_1",
@@ -597,7 +597,7 @@
         },
         {
             "name": "digicontext_2",
-            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "cmd": "dd if=/dev/urandom of=tempfile bs=1M count=500; cat tempfile > /dev/null; awk 'BEGIN { for (i = 0; i < 1000000; ++i) print i^2.5 }'",
             "needs": ["linkGRP_2", "sgnsim_2"],
             "resources": {
                 "cpu": 1,
@@ -610,7 +610,7 @@
         },
         {
             "name": "tpcdigi_2",
-            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "cmd": "dd if=/dev/urandom of=tempfile bs=1M count=500; cat tempfile > /dev/null; awk 'BEGIN { for (i = 0; i < 1000000; ++i) print i^2.5 }'",
             "needs": [
                 "digicontext_2",
                 "linkGRP_2",
@@ -627,7 +627,7 @@
         },
         {
             "name": "trddigi_2",
-            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "cmd": "dd if=/dev/urandom of=tempfile bs=1M count=500; cat tempfile > /dev/null; awk 'BEGIN { for (i = 0; i < 1000000; ++i) print i^2.5 }'",
             "needs": ["digicontext_2"],
             "resources": {
                 "cpu": 8,
@@ -640,7 +640,7 @@
         },
         {
             "name": "restdigi_2",
-            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "cmd": "dd if=/dev/zero of=tempfile bs=1M count=500; awk 'BEGIN { for (i = 0; i < 1000000; ++i) print i^2.5 }'",
             "needs": ["digicontext_2"],
             "resources": {
                 "cpu": 1,
@@ -653,7 +653,7 @@
         },
         {
             "name": "ft0fv0emcctp_digi_2",
-            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "cmd": "dd if=/dev/urandom of=tempfile bs=1M count=500; cat tempfile > /dev/null; awk 'BEGIN { for (i = 0; i < 1000000; ++i) print i^2.5 }'",
             "needs": ["digicontext_2"],
             "resources": {
                 "cpu": 1,
@@ -666,7 +666,7 @@
         },
         {
             "name": "tpcclusterpart0_2",
-            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "cmd": "dd if=/dev/urandom of=tempfile bs=1M count=500; cat tempfile > /dev/null; awk 'BEGIN { for (i = 0; i < 1000000; ++i) print i^2.5 }'",
             "needs": ["tpcdigi_2"],
             "resources": {
                 "cpu": 2,
@@ -685,7 +685,7 @@
         },
         {
             "name": "tpcclusterpart1_2",
-            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "cmd": "dd if=/dev/urandom of=tempfile bs=1M count=500; cat tempfile > /dev/null; awk 'BEGIN { for (i = 0; i < 1000000; ++i) print i^2.5 }'",
             "needs": ["tpcdigi_2"],
             "resources": {
                 "cpu": 2,
@@ -704,7 +704,7 @@
         },
         {
             "name": "tpcclustermerge_2",
-            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "cmd": "dd if=/dev/urandom of=tempfile bs=1M count=500; cat tempfile > /dev/null; awk 'BEGIN { for (i = 0; i < 1000000; ++i) print i^2.5 }'",
             "needs": ["tpcclusterpart0_2", "tpcclusterpart1_2"],
             "resources": {
                 "cpu": 1,
@@ -717,7 +717,7 @@
         },
         {
             "name": "tpcreco_2",
-            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "cmd": "dd if=/dev/urandom of=tempfile bs=1M count=500; cat tempfile > /dev/null; awk 'BEGIN { for (i = 0; i < 1000000; ++i) print i^2.5 }'",
             "needs": ["tpcclustermerge_2"],
             "resources": {
                 "cpu": 3.0,
@@ -730,7 +730,7 @@
         },
         {
             "name": "itsreco_2",
-            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "cmd": "dd if=/dev/urandom of=tempfile bs=1M count=500; cat tempfile > /dev/null; awk 'BEGIN { for (i = 0; i < 1000000; ++i) print i^2.5 }'",
             "needs": ["restdigi_2"],
             "resources": {
                 "cpu": 1,
@@ -743,7 +743,7 @@
         },
         {
             "name": "ft0reco_2",
-            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "cmd": "dd if=/dev/urandom of=tempfile bs=1M count=500; cat tempfile > /dev/null; awk 'BEGIN { for (i = 0; i < 1000000; ++i) print i^2.5 }'",
             "needs": ["ft0fv0emcctp_digi_2"],
             "resources": {
                 "cpu": 1,
@@ -756,7 +756,7 @@
         },
         {
             "name": "itstpcMatch_2",
-            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "cmd": "dd if=/dev/urandom of=tempfile bs=1M count=500; cat tempfile > /dev/null; awk 'BEGIN { for (i = 0; i < 1000000; ++i) print i^2.5 }'",
             "needs": ["tpcreco_2", "itsreco_2", "ft0reco_2"],
             "resources": {
                 "cpu": 3.0,
@@ -769,7 +769,7 @@
         },
         {
             "name": "trdreco_2",
-            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "cmd": "dd if=/dev/urandom of=tempfile bs=1M count=500; cat tempfile > /dev/null; awk 'BEGIN { for (i = 0; i < 1000000; ++i) print i^2.5 }'",
             "needs": ["trddigi_2", "itstpcMatch_2", "tpcreco_2", "itsreco_2"],
             "resources": {
                 "cpu": 1,
@@ -782,7 +782,7 @@
         },
         {
             "name": "trdreco2_2",
-            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "cmd": "dd if=/dev/urandom of=tempfile bs=1M count=500; cat tempfile > /dev/null; awk 'BEGIN { for (i = 0; i < 1000000; ++i) print i^2.5 }'",
             "needs": ["trdreco_2"],
             "resources": {
                 "cpu": 1,
@@ -795,7 +795,7 @@
         },
         {
             "name": "tofmatch_2",
-            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "cmd": "dd if=/dev/urandom of=tempfile bs=1M count=500; cat tempfile > /dev/null; awk 'BEGIN { for (i = 0; i < 1000000; ++i) print i^2.5 }'",
             "needs": ["itstpcMatch_2", "restdigi_2"],
             "resources": {
                 "cpu": 1,
@@ -808,7 +808,7 @@
         },
         {
             "name": "toftpcmatch_2",
-            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "cmd": "dd if=/dev/urandom of=tempfile bs=1M count=500; cat tempfile > /dev/null; awk 'BEGIN { for (i = 0; i < 1000000; ++i) print i^2.5 }'",
             "needs": ["tofmatch_2", "tpcreco_2", "trdreco2_2"],
             "resources": {
                 "cpu": 1,
@@ -821,7 +821,7 @@
         },
         {
             "name": "mftreco_2",
-            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "cmd": "dd if=/dev/urandom of=tempfile bs=1M count=500; cat tempfile > /dev/null; awk 'BEGIN { for (i = 0; i < 1000000; ++i) print i^2.5 }'",
             "needs": ["restdigi_2"],
             "resources": {
                 "cpu": 1,
@@ -1019,7 +1019,7 @@
         },
         {
             "name": "aod_2",
-            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "cmd": "awk 'BEGIN { for (i = 0; i < 1000000; ++i) print i^2.5 }'",
             "needs": [
                 "pvfinder_2",
                 "svfinder_2",
@@ -1044,7 +1044,7 @@
         },
         {
             "name": "aodmerge",
-            "cmd": "echo running ; sleep $((RANDOM % 2 + 1))",
+            "cmd": "awk 'BEGIN { for (i = 0; i < 1000000; ++i) print i^2.5 }'",
             "needs": ["aod_1", "aod_2"],
             "resources": {
                 "cpu": 1,
