@@ -688,7 +688,7 @@ Use the `--produce-script myscript.sh` option for this.";
 
                 total_rss = total_rss / 1024 / 1024;
 
-                let nice_value = unsafe { getpriority(PRIO_PROCESS, pid) };
+                let nice_value = unsafe { 20 - getpriority(PRIO_PROCESS, pid) };
                 let mut task_resources: BTreeMap<&str, serde_json::Value> = BTreeMap::new();
 
                 task_resources.insert(
