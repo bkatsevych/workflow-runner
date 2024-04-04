@@ -466,7 +466,7 @@ Use the `--produce-script myscript.sh` option for this.";
         let mut finished_tasks: Vec<usize> = Vec::new(); // Vector of finished tasks
 
         // instance use to query memory / cpu for process pids
-        let system = System::new_all();
+        let mut system = System::new_all();
 
         println!("candidates: {:?}", candidates);
 
@@ -520,6 +520,7 @@ Use the `--produce-script myscript.sh` option for this.";
 
             while self.wait_for_any(&mut finished_from_started, &mut failing) {
                 if !self.arguments.dry_run {
+                    system.refresh_all();
                     self.monitor(&system);
                     thread::sleep(Duration::from_secs(1));
                     self.internal_monitor_counter += 1;
@@ -670,7 +671,6 @@ Use the `--produce-script myscript.sh` option for this.";
 
                 for child_proc_id in allprocs {
                     let mut this_rss: u64 = 0;
-
                     // get process reference
                     if let Some(p) = system.process(child_proc_id) {
                         // MEMORY part
@@ -680,6 +680,8 @@ Use the `--produce-script myscript.sh` option for this.";
                         // CPU part
                         let this_cpu = p.cpu_usage();
                         total_cpu += this_cpu;
+                    } else {
+                        println!("Process not found, make sure System object is being refreshed systematically");
                     }
                 }
                 let time_delta = self
