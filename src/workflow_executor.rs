@@ -58,7 +58,6 @@ pub struct WorkflowExecutor<'a> {
 
 impl<'a> WorkflowExecutor<'a> {
     pub fn new(arguments: Arguments, action_logger: Logger, metric_logger: Logger) -> Self {
-        let sysinfo = System::new_all();
         let is_production_mode = arguments.production_mode.clone();
         let workflow_file: String = arguments.workflow_file.clone();
         let mut workflow_spec = load_json(workflow_file.as_str()).unwrap();
