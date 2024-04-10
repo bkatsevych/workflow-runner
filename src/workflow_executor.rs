@@ -680,7 +680,9 @@ Use the `--produce-script myscript.sh` option for this.";
                         let this_cpu = p.cpu_usage();
                         total_cpu += this_cpu;
                     } else {
-                        println!("Process not found, make sure System object is being refreshed systematically");
+                        println!(
+                            "Process not found, make sure System object gets refreshed properly"
+                        );
                     }
                 }
                 let time_delta = self
