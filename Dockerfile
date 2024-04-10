@@ -13,5 +13,3 @@ COPY . .
 # Define entrypoint
 ENTRYPOINT ["cargo", "run", "--"]
 
-# Default command parameters
-CMD ["-f", "workflow_fake.json", "--mem-limit", "16000"]

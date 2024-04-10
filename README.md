@@ -12,10 +12,21 @@ Typical workflows targeted by the tool are complex bash scripts of interdependen
 
 # Example usage
 
-General help
+### General help
 
 ```
 $ cargo run -- --help
+```
+
+### Run in a Linux environment
+
+-   Simply build an image and run a container from it. You can set arguments at runtime (see the example below).
+-   Log files will be stored in the current directory (pwd), making it easy to check them. However, keep in mind that `process::id()` will always be `1`, so it's better to provide a name for each logger explicitly. Otherwise, new logging information will be appended to the previous one each time you run the app.
+
+```
+docker build -t your_image_name .
+
+docker run --rm -v "$(pwd)":/usr/src/app your_image_name -f workflow_fake.json --mem-limit 16000 --target-tasks grpcreate --action-logfile docker_action_1 --metric-logfile docker_metric_1
 ```
 
 # To do
