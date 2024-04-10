@@ -24,13 +24,21 @@ fn main() {
 
     // first file logger
     let action_logger = Logger::new(
-        format!("pipeline_action_{}.log", process::id()),
+        arguments
+            .action_logfile
+            .clone()
+            .map(|logfile| format!("{}.log", logfile))
+            .unwrap_or_else(|| format!("pipeline_action_{}.log", process::id())),
         LogLevel::INFO,
     );
 
     // second file logger
     let metric_logger = Logger::new(
-        format!("pipeline_metric_{}.log", process::id()),
+        arguments
+            .metric_logfile
+            .clone()
+            .map(|logfile| format!("{}.log", logfile))
+            .unwrap_or_else(|| format!("pipeline_metric_{}.log", process::id())),
         LogLevel::INFO,
     );
 
