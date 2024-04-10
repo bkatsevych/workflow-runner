@@ -20,7 +20,7 @@
         },
         {
             "name": "grpcreate",
-            "cmd": "./heavy_calculator",
+            "cmd": "python3 myprogram.py",
             "needs": [],
             "resources": {
                 "cpu": 0,
@@ -33,7 +33,7 @@
         },
         {
             "name": "tpc_spacecharge_downloader",
-            "cmd": "./heavy_calculator",
+            "cmd": "python3 myprogram.py",
             "needs": [],
             "resources": {
                 "cpu": 0,
