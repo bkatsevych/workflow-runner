@@ -2,8 +2,10 @@ use serde_json::Value;
 use std::fs::File;
 use std::io::BufReader;
 use std::io::Error;
+use std::io::{self, BufRead};
+use std::path::Path;
 use std::process;
-use sysinfo::{Pid, Process, Signal, System};
+use sysinfo::{Pid, System};
 
 pub fn load_json(workflow_file: &str) -> Result<Value, Error> {
     let file = File::open(workflow_file)?;
@@ -49,4 +51,39 @@ pub fn find_child_processes_recursive(system: &System, pid: Pid) -> Vec<Pid> {
     find_children(system, pid, &mut child_pids);
 
     child_pids
+}
+
+fn get_metric(pid: u32, metrics: &[&str]) -> io::Result<u64> {
+    let path = format!("/proc/{}/smaps", pid);
+    let file = File::open(&Path::new(&path))?;
+    let reader = io::BufReader::new(file);
+
+    let mut total = 0;
+
+    for line in reader.lines() {
+        let line = line?;
+        for metric in metrics {
+            if line.starts_with(metric) {
+                let parts: Vec<&str> = line.split_whitespace().collect();
+                if let Some(metric_str) = parts.get(1) {
+                    let metric_value: u64 = metric_str.parse().unwrap_or(0);
+                    total += metric_value;
+                }
+            }
+        }
+    }
+
+    Ok(total)
+}
+
+pub fn get_pss(pid: u32) -> io::Result<u64> {
+    get_metric(pid, &["Pss:"])
+}
+
+pub fn get_swap(pid: u32) -> io::Result<u64> {
+    get_metric(pid, &["Swap:"])
+}
+
+pub fn get_uss(pid: u32) -> io::Result<u64> {
+    get_metric(pid, &["Private_Clean:", "Private_Dirty:"])
 }

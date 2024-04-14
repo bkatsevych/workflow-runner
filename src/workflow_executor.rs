@@ -2,7 +2,7 @@ use crate::arguments::Arguments;
 use crate::graph::Graph;
 use crate::logger::Logger;
 use crate::resource_manager::ResourceManager;
-use crate::utils::{find_child_processes_recursive, load_json};
+use crate::utils::{find_child_processes_recursive, get_pss, get_swap, get_uss, load_json};
 use libc::{getpriority, setpriority, PRIO_PROCESS};
 use regex::Regex;
 use serde_json::Map;
@@ -653,7 +653,7 @@ Use the `--produce-script myscript.sh` option for this.";
             println!("DOING MONITORING");
 
             let mut global_cpu: f32 = 0.0;
-            let mut global_rss: u64 = 0;
+            let mut global_pss = 0;
             let mut resources_per_task: BTreeMap<&usize, BTreeMap<&str, serde_json::Value>> =
                 BTreeMap::new();
 
@@ -665,18 +665,41 @@ Use the `--produce-script myscript.sh` option for this.";
                 allprocs.extend(find_child_processes_recursive(&system, Pid::from_u32(pid)));
 
                 // accumulate total metrics
-                let mut total_cpu = 0.0;
-                let mut total_rss: u64 = 0;
+                let mut total_cpu: f32 = 0.0;
+                let mut total_pss: u64 = 0;
+                let mut total_swap: u64 = 0;
+                let mut total_uss: u64 = 0;
 
                 for child_proc_id in allprocs {
-                    let mut this_rss: u64 = 0;
-                    // get process reference
-                    if let Some(p) = system.process(child_proc_id) {
-                        // MEMORY part
-                        this_rss = p.memory();
-                        total_rss += this_rss;
+                    let mut this_pss = 0;
+                    let mut this_uss = 0;
 
-                        // CPU part
+                    // MEMORY part
+                    match get_pss(Pid::as_u32(child_proc_id)) {
+                        Ok(pss) => {
+                            this_pss = pss;
+                            total_pss += this_pss;
+                        }
+                        Err(e) => println!("Failed to get PSS: {}", e),
+                    }
+
+                    match get_swap(Pid::as_u32(child_proc_id)) {
+                        Ok(swap) => {
+                            total_swap += swap;
+                        }
+                        Err(e) => println!("Failed to get Swap: {}", e),
+                    }
+
+                    match get_uss(Pid::as_u32(child_proc_id)) {
+                        Ok(uss) => {
+                            this_uss = uss;
+                            total_uss += this_uss;
+                        }
+                        Err(e) => println!("Failed to get Uss: {}", e),
+                    }
+
+                    // CPU part
+                    if let Some(p) = system.process(child_proc_id) {
                         let this_cpu = p.cpu_usage();
                         total_cpu += this_cpu;
                     } else {
@@ -685,11 +708,13 @@ Use the `--produce-script myscript.sh` option for this.";
                         );
                     }
                 }
+
                 let time_delta = self
                     .start_time
                     .map_or(0, |t| Instant::now().duration_since(t).as_millis() as i32);
 
-                total_rss = total_rss / 1024 / 1024;
+                total_uss = total_uss / 1024 / 1024;
+                total_pss = total_pss / 1024 / 1024;
 
                 let nice_value = unsafe { 20 - getpriority(PRIO_PROCESS, pid) };
                 let mut task_resources: BTreeMap<&str, serde_json::Value> = BTreeMap::new();
@@ -703,8 +728,10 @@ Use the `--produce-script myscript.sh` option for this.";
                     serde_json::Value::String(self.id_to_task[*tid].clone()),
                 );
                 task_resources.insert("cpu", serde_json::Value::Number((total_cpu as u64).into()));
-                task_resources.insert("rss", serde_json::Value::Number(total_rss.into()));
+                task_resources.insert("uss", serde_json::Value::Number(total_uss.into()));
+                task_resources.insert("pss", serde_json::Value::Number(total_pss.into()));
                 task_resources.insert("nice", serde_json::Value::Number(nice_value.into()));
+                task_resources.insert("swap", serde_json::Value::Number(total_swap.into()));
                 task_resources.insert("label", self.workflow_spec["stages"][tid]["labels"].clone());
 
                 resources_per_task.insert(tid, task_resources);
@@ -713,19 +740,19 @@ Use the `--produce-script myscript.sh` option for this.";
                     tid,
                     time_delta,
                     total_cpu / 100.0,
-                    total_rss,
+                    total_pss,
                 );
 
                 if nice_value == self.resource_manager.nice_default {
                     global_cpu += total_cpu;
-                    global_rss += total_rss;
+                    global_pss += total_pss;
                 }
 
                 self.metric_logger
                     .info(&format!("{:?}", resources_per_task.get(tid).unwrap()));
             }
 
-            if global_rss > self.resource_manager.resource_boundaries.mem_limit {
+            if global_pss > self.resource_manager.resource_boundaries.mem_limit {
                 self.metric_logger
                     .info(&format!("***MEMORY LIMIT EXCEEDED***",));
             }
