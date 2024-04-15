@@ -646,6 +646,94 @@ Use the `--produce-script myscript.sh` option for this.";
         fs::remove_file(timef).unwrap();
     }
 
+    #[cfg(not(target_os = "linux"))]
+    fn monitor(&mut self, system: &System) {
+        if self.internal_monitor_counter % 5 == 0 {
+            self.internal_monitor_id += 1;
+
+            println!("DOING MONITORING");
+
+            let mut global_cpu: f32 = 0.0;
+            let mut global_rss: u64 = 0;
+            let mut resources_per_task: BTreeMap<&usize, BTreeMap<&str, serde_json::Value>> =
+                BTreeMap::new();
+
+            for (tid, proc) in &self.process_list {
+                let pid = proc.id();
+                let mut allprocs: Vec<Pid> = Vec::new();
+
+                allprocs.push(Pid::from_u32(pid));
+                allprocs.extend(find_child_processes_recursive(&system, Pid::from_u32(pid)));
+
+                // accumulate total metrics
+                let mut total_cpu = 0.0;
+                let mut total_rss: u64 = 0;
+
+                for child_proc_id in allprocs {
+                    let mut this_rss: u64 = 0;
+                    // get process reference
+                    if let Some(p) = system.process(child_proc_id) {
+                        // MEMORY part
+                        this_rss = p.memory();
+                        total_rss += this_rss;
+
+                        // CPU part
+                        let this_cpu = p.cpu_usage();
+                        total_cpu += this_cpu;
+                    } else {
+                        println!(
+                            "Process not found, make sure System object gets refreshed properly"
+                        );
+                    }
+                }
+                let time_delta = self
+                    .start_time
+                    .map_or(0, |t| Instant::now().duration_since(t).as_millis() as i32);
+
+                total_rss = total_rss / 1024 / 1024;
+
+                let nice_value = unsafe { 20 - getpriority(PRIO_PROCESS, pid) };
+                let mut task_resources: BTreeMap<&str, serde_json::Value> = BTreeMap::new();
+
+                task_resources.insert(
+                    "iter",
+                    serde_json::Value::Number(self.internal_monitor_id.into()),
+                );
+                task_resources.insert(
+                    "name",
+                    serde_json::Value::String(self.id_to_task[*tid].clone()),
+                );
+                task_resources.insert("cpu", serde_json::Value::Number((total_cpu as u64).into()));
+                task_resources.insert("rss", serde_json::Value::Number(total_rss.into()));
+                task_resources.insert("nice", serde_json::Value::Number(nice_value.into()));
+                task_resources.insert("label", self.workflow_spec["stages"][tid]["labels"].clone());
+
+                resources_per_task.insert(tid, task_resources);
+
+                self.resource_manager.add_monitored_resources(
+                    tid,
+                    time_delta,
+                    total_cpu / 100.0,
+                    total_rss,
+                );
+
+                if nice_value == self.resource_manager.nice_default {
+                    global_cpu += total_cpu;
+                    global_rss += total_rss;
+                }
+
+                self.metric_logger
+                    .info(&format!("{:?}", resources_per_task.get(tid).unwrap()));
+            }
+
+            if global_rss > self.resource_manager.resource_boundaries.mem_limit {
+                self.metric_logger
+                    .info(&format!("***MEMORY LIMIT EXCEEDED***",));
+            }
+        }
+    }
+
+    #[cfg(target_os = "linux")]
     fn monitor(&mut self, system: &System) {
         if self.internal_monitor_counter % 5 == 0 {
             self.internal_monitor_id += 1;
