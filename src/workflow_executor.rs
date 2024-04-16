@@ -801,8 +801,9 @@ Use the `--produce-script myscript.sh` option for this.";
                     .start_time
                     .map_or(0, |t| Instant::now().duration_since(t).as_millis() as i32);
 
-                total_uss = total_uss / 1024 / 1024;
-                total_pss = total_pss / 1024 / 1024;
+                // return uss and pss in Mbs (remember that uss is still in Kbs)
+                total_uss = total_uss / 1024;
+                total_pss = total_pss / 1024;
 
                 let nice_value = unsafe { 20 - getpriority(PRIO_PROCESS, pid) };
                 let mut task_resources: BTreeMap<&str, serde_json::Value> = BTreeMap::new();

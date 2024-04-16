@@ -53,6 +53,7 @@ pub fn find_child_processes_recursive(system: &System, pid: Pid) -> Vec<Pid> {
     child_pids
 }
 
+// more info about /proc/PID/smaps file: https://shorturl.at/ituHO
 fn get_metric(pid: u32, metrics: &[&str]) -> io::Result<u64> {
     let path = format!("/proc/{}/smaps", pid);
     let file = File::open(&Path::new(&path))?;
