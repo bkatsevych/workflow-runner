@@ -10,7 +10,7 @@ pub struct Arguments {
 
     /// Number of maximal parallel tasks
     #[arg(long, default_value_t = 100)]
-    pub maxjobs: u16,
+    pub maxjobs: i16,
 
     /// Keep executing the pipeline as far possibe (not stopping on first failure).
     #[arg(short, long)]

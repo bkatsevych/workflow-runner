@@ -17,7 +17,7 @@ use std::process::Command;
 use std::thread;
 use std::time::Duration;
 use std::time::Instant;
-use sysinfo::{CpuRefreshKind, Pid, Process, RefreshKind, System};
+use sysinfo::{CpuRefreshKind, Pid, RefreshKind, System};
 use tar::Builder;
 
 struct DagProperties {
@@ -58,7 +58,7 @@ pub struct WorkflowExecutor<'a> {
 
 impl<'a> WorkflowExecutor<'a> {
     pub fn new(arguments: Arguments, action_logger: Logger, metric_logger: Logger) -> Self {
-        let is_production_mode = arguments.production_mode.clone();
+        let is_production_mode = arguments.production_mode;
         let workflow_file: String = arguments.workflow_file.clone();
         let mut workflow_spec = load_json(workflow_file.as_str()).unwrap();
         let global_init = extract_global_environment(&mut workflow_spec);
@@ -124,11 +124,11 @@ impl<'a> WorkflowExecutor<'a> {
 
         // construct the object that is in charge of resource management...
         let mut resource_manager = ResourceManager::new(
-            arguments.cpu_limit.clone(),
-            arguments.mem_limit.clone(),
-            arguments.maxjobs.clone(),
-            arguments.dynamic_resources.clone(),
-            arguments.optimistic_resources.clone(),
+            arguments.cpu_limit,
+            arguments.mem_limit,
+            arguments.maxjobs,
+            arguments.dynamic_resources,
+            arguments.optimistic_resources,
         );
 
         if let Some(stages) = workflow_spec["stages"].as_array() {
@@ -159,7 +159,7 @@ impl<'a> WorkflowExecutor<'a> {
             taskneeds.insert(t.clone(), requirements_set);
         }
 
-        let stop_on_failure = !arguments.keep_going.clone();
+        let stop_on_failure = !arguments.keep_going;
 
         println!("Stop on failure: {}", stop_on_failure);
 
@@ -432,7 +432,7 @@ Use the `--produce-script myscript.sh` option for this.";
             if let Some(stages) = self.workflow_spec.get("stages").and_then(|v| v.as_array()) {
                 for task in stages {
                     if let Some(task_name) = task.get("name").and_then(|v| v.as_str()) {
-                        if Regex::new(&rerun_from).unwrap().is_match(task_name) {
+                        if Regex::new(rerun_from).unwrap().is_match(task_name) {
                             rerun_task_found = true;
                             if let Some(task_id) = self.task_to_id.get(task_name) {
                                 let dependent_tasks = find_all_dependent_tasks(
@@ -598,7 +598,7 @@ Use the `--produce-script myscript.sh` option for this.";
         errorencountered
     }
 
-    fn is_good_candidate(&self, candid: isize, finishedtasks: &Vec<usize>) -> bool {
+    fn is_good_candidate(&self, candid: isize, finishedtasks: &[usize]) -> bool {
         if *self.procstatus.get(&(candid as usize)).unwrap_or(&"") != "ToDo" {
             return false;
         }
@@ -663,7 +663,7 @@ Use the `--produce-script myscript.sh` option for this.";
                 let mut allprocs: Vec<Pid> = Vec::new();
 
                 allprocs.push(Pid::from_u32(pid));
-                allprocs.extend(find_child_processes_recursive(&system, Pid::from_u32(pid)));
+                allprocs.extend(find_child_processes_recursive(system, Pid::from_u32(pid)));
 
                 // accumulate total metrics
                 let mut total_cpu = 0.0;
@@ -925,7 +925,7 @@ Use the `--produce-script myscript.sh` option for this.";
             self.stop_pipeline_and_exit();
         }
 
-        finished.len() == 0
+        finished.is_empty()
     }
 
     fn stop_pipeline_and_exit(&mut self) {
@@ -1245,7 +1245,7 @@ fn print_all_topological_orders(
 }
 
 fn analyse_graph(
-    edges: &mut Vec<(isize, isize)>,
+    edges: &mut [(isize, isize)],
     nodes: &mut Vec<isize>,
 ) -> (Vec<Vec<isize>>, HashMap<isize, Vec<isize>>) {
     let n = nodes.len();
@@ -1266,7 +1266,7 @@ fn analyse_graph(
         }
     }
 
-    let orderings = print_all_topological_orders(&edges, n, 1);
+    let orderings = print_all_topological_orders(edges, n, 1);
 
     (orderings, next_job_trivial)
 }
@@ -1355,7 +1355,7 @@ pub fn update_resource_estimates(
             let mut split_name = task["name"]
                 .as_str()
                 .unwrap()
-                .split("_")
+                .split('_')
                 .collect::<Vec<&str>>();
             split_name.pop();
             split_name.join("_")
@@ -1370,45 +1370,39 @@ pub fn update_resource_estimates(
         let new_resources = resource_dict[&name].as_object().unwrap();
 
         // memory
-        match new_resources.get("mem") {
-            Some(newmem) => {
-                let oldmem = task["resources"]["mem"].as_f64().unwrap();
-                action_logger.info(&format!(
-                    "Updating mem estimate for {} from {} to {}",
-                    task["name"], oldmem, newmem
-                ));
-                task["resources"]["mem"] = newmem.clone();
-            }
-            None => {}
+        if let Some(newmem) = new_resources.get("mem") {
+            let oldmem = task["resources"]["mem"].as_f64().unwrap();
+            action_logger.info(&format!(
+                "Updating mem estimate for {} from {} to {}",
+                task["name"], oldmem, newmem
+            ));
+            task["resources"]["mem"] = newmem.clone();
         }
 
         // cpu
-        match new_resources.get("cpu") {
-            Some(newcpu) => {
-                let mut newcpu = newcpu.as_f64().unwrap();
-                let oldcpu = task["resources"]["cpu"].as_f64().unwrap();
-                let rel_cpu = task["resources"]["relative_cpu"].as_f64();
+        if let Some(newcpu) = new_resources.get("cpu") {
+            let mut newcpu = newcpu.as_f64().unwrap();
+            let oldcpu = task["resources"]["cpu"].as_f64().unwrap();
+            let rel_cpu = task["resources"]["relative_cpu"].as_f64();
 
-                if let Some(rel_cpu) = rel_cpu {
-                    // respect the relative CPU settings
-                    // By default, the CPU value in the workflow is already scaled if relative_cpu is given.
-                    // The new estimate on the other hand is not yet scaled so it needs to be done here.
-                    newcpu *= rel_cpu;
-                }
-
-                action_logger.info(&format!(
-                    "Updating cpu estimate for {} from {} to {}",
-                    task["name"], oldcpu, newcpu
-                ));
-                task["resources"]["cpu"] = Value::from(newcpu);
+            if let Some(rel_cpu) = rel_cpu {
+                // respect the relative CPU settings
+                // By default, the CPU value in the workflow is already scaled if relative_cpu is given.
+                // The new estimate on the other hand is not yet scaled so it needs to be done here.
+                newcpu *= rel_cpu;
             }
-            None => {}
+
+            action_logger.info(&format!(
+                "Updating cpu estimate for {} from {} to {}",
+                task["name"], oldcpu, newcpu
+            ));
+            task["resources"]["cpu"] = Value::from(newcpu);
         }
     }
 }
 
 fn get_global_task_name(name: &str) -> String {
-    let tokens: Vec<&str> = name.split("_").collect();
+    let tokens: Vec<&str> = name.split('_').collect();
     match tokens.last().unwrap().parse::<i32>() {
         Ok(_) => tokens[..tokens.len() - 1].join("_"),
         Err(_) => name.to_string(),
@@ -1451,12 +1445,12 @@ fn get_alienv_software_environment(
     }
 
     let envstring = String::from_utf8(output.stdout)?;
-    let tokens: Vec<&str> = envstring.split(";").collect();
+    let tokens: Vec<&str> = envstring.split(';').collect();
     let mut envmap = HashMap::new();
 
     for t in tokens {
-        if t.contains("=") {
-            let assignment: Vec<&str> = t.trim().split("=").collect();
+        if t.contains('=') {
+            let assignment: Vec<&str> = t.trim().split('=').collect();
             envmap.insert(assignment[0].to_string(), assignment[1].to_string());
         } else if t.contains("export") {
             let variable = t.split_whitespace().nth(1).unwrap();

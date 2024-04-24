@@ -188,11 +188,11 @@ pub struct ResourceManager {
     pub resource_boundaries: ResourceBoundaries,
     cpu_booked: f64,
     mem_booked: f64,
-    n_procs: u16,
+    n_procs: i16,
     cpu_booked_backfill: f64,
     mem_booked_backfill: f64,
-    n_procs_backfill: u16,
-    procs_parallel_max: u16,
+    n_procs_backfill: i16,
+    procs_parallel_max: i16,
     pub nice_default: i32,
     nice_backfill: i32,
 }
@@ -201,7 +201,7 @@ impl ResourceManager {
     pub fn new(
         cpu_limit: u16,
         mem_limit: u64,
-        procs_parallel_max: u16,
+        procs_parallel_max: i16,
         dynamic_resources: bool,
         optimistic_resources: bool,
     ) -> Self {
@@ -285,8 +285,8 @@ impl ResourceManager {
         }
     }
 
-    pub fn ok_to_submit(&mut self, tids: &mut Vec<isize>) -> Option<(usize, i32)> {
-        let tids_copy = tids.clone();
+    pub fn ok_to_submit(&mut self, tids: &mut [isize]) -> Option<(usize, i32)> {
+        let tids_copy = tids.to_owned();
 
         let ok_to_submit_default = |res: &TaskResources| -> Option<i32> {
             let okcpu =
@@ -330,7 +330,7 @@ impl ResourceManager {
             return None;
         }
 
-        for (ok_to_submit_impl, should_break) in vec![
+        for (ok_to_submit_impl, should_break) in [
             (
                 Box::new(ok_to_submit_default) as Box<dyn Fn(&TaskResources) -> Option<i32>>,
                 true,
