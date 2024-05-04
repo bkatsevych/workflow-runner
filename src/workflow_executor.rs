@@ -467,8 +467,6 @@ Use the `--produce-script myscript.sh` option for this.";
         // instance use to query memory / cpu for process pids
         let mut system = System::new_all();
 
-        println!("candidates: {:?}", candidates);
-
         // sort candidate list according to task weights
         let mut candidates: Vec<(isize, (i32, i32))> = candidates
             .iter()
@@ -496,11 +494,6 @@ Use the `--produce-script myscript.sh` option for this.";
             //    "Sorted current candidates: {:?}",
             //   sorted_candidates
             //));
-
-            println!(
-                "Sorted current candidates: {:?}",
-                candidates_without_weights
-            );
 
             self.try_jobs_from_candidates(&mut candidates_without_weights, &mut finished);
 
@@ -650,8 +643,6 @@ Use the `--produce-script myscript.sh` option for this.";
     fn monitor(&mut self, system: &System) {
         if self.internal_monitor_counter % 5 == 0 {
             self.internal_monitor_id += 1;
-
-            println!("DOING MONITORING");
 
             let mut global_cpu: f32 = 0.0;
             let mut global_rss: u64 = 0;
@@ -852,10 +843,6 @@ Use the `--produce-script myscript.sh` option for this.";
         let mut failure_detected = false;
         let mut failing_pids: Vec<u32> = Vec::new();
 
-        println!(
-            "Waiting for process. Current process list has length {} ",
-            self.process_list.len()
-        );
         if self.process_list.is_empty() {
             return false;
         }
@@ -877,7 +864,6 @@ Use the `--produce-script myscript.sh` option for this.";
                     Ok(None) => return_code = -1,
                     Err(_) => return_code = 1,
                 };
-                println!("Exit status of {} {}", p.1.id(), return_code)
             }
 
             if return_code != -1 {
